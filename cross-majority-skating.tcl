@@ -113,7 +113,7 @@ evaluate_round_final_skating(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_final_skating(marks, places) = 
-    report : map(no, start in maj_report, merge(start, child_report[no])),
+    report : merge(maj_report, child_report),
     places : compute_places(child_scores)
 where
     maj_report, maj_places = evaluate_round_final(marks, places),
@@ -134,12 +134,19 @@ skating_refine_r10:
 skating_refine_r10(marks, places, scores, for_place) =
     { "report" : {}, "scores" : scores }                        if for_place > #field |
     skating_refine_r10(marks, places, scores, for_place + 1)    if num_candidates < 2 |
-    skating_apply_r10 (marks, places, scores, for_place)
+    { "report" : r10_report, "scores" : descend["scores"] }
 where 
-    result = compute_places(scores)
-    num_candidates = count(start in result, start["pmin"] = for_place)
-    field = keys(first(places));
-
+    field           = keys(first(places)),
+    placings        = compute_places(scores),
+    num_candidates  = count(placing in placings, placing["pmin"] = for_place),
+    descend         = skating_refine_r11 (marks, places, r10_scores, for_place),
+    report_out      = merge(descend["report"], r10_report),
+where
+    r10_report      = ,
+    r10_scores      = map(start, score in scores, concat(score, { index : value }))
+                      where index = for_place,
+                            value = 0 if placings[start]["pmin"] != for_place |
+                                    -count(dance in places, dance[start]["pval"] <= for_place);
 
 
 
