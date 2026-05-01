@@ -56,7 +56,7 @@ evaluate_round_elimination(template_evaluate_round):
     /// marks are bool (0/1, 1=TRUE iff crossed), jury is not partitioned
     marks   : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : bool } } } }, 
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
+    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
     /// report number of crosses per participant
     report  : { start_no+ : { "count" : nat } },            
@@ -81,7 +81,7 @@ evaluate_round_final(template_evaluate_round):
     /// marks are natural numbers, jury is not partitioned
     marks   : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
+    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
     /// report sum of place values
     report  : { start_no+ : { "places-sum" : real } },            
@@ -105,7 +105,7 @@ evaluate_round_final_skating(template_evaluate_round):
     /// marks are natural numbers, jury is not partitioned
     marks   : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
+    places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
     /// report sum of place values
     report  : { start_no+ : { "places-sum" : real } },            
@@ -113,13 +113,36 @@ evaluate_round_final_skating(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_final_skating(marks, places) = 
-    report, places 
+    report : map(no, start in maj_report, merge(start, child_report[no])),
+    places : compute_places(child_scores)
 where
-    raw_report, raw_places = evaluate_round_final(marks, places)
-    field = keys(first(places))
-    place =
+    maj_report, maj_places = evaluate_round_final(marks, places),
+    scores = map(start in maj_places, { 0 : start["pval"] });
+    child_report, child_scores = skating_refine_r10(marks, places, scores);
 
-TODO
+
+
+skating_refine_r10:
+    marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
+    places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
+    scores      : { start_no+ : object },
+    for_place   : nat = 1
+->
+    report      : { start_no+ : { colum-tree+ : any } },            
+    scores      : { start_no+ : object },
+
+skating_refine_r10(marks, places, scores, for_place) =
+    { "report" : {}, "scores" : scores }                        if for_place > #field |
+    skating_refine_r10(marks, places, scores, for_place + 1)    if num_candidates < 2 |
+    skating_apply_r10 (marks, places, scores, for_place)
+where 
+    result = compute_places(scores)
+    num_candidates = count(start in result, start["pmin"] = for_place)
+    field = keys(first(places));
+
+
+
+
 
 
 // Helpers =============================================================================================================
