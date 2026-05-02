@@ -125,19 +125,17 @@ where
     scores_down = map(start in majority_places, { 0 : start["pval"] });
     // invoke recursive refinement from here
     scores_up   = skating_refine_r10(marks, places, scores_down);
-    // extract full skating report from obtained skating scores 
+    // extract full skating report from obtained skating scores (please note negation where higher is better)
     skating_report = map(
-        my_score in scores_up,
-        { 
-            "R10" : merge(index, value in my_score[1..#field-1], 
-                                 { index : { "count" : -value } }),
-            "R11" : merge(index, value in my_score[#field..3*(#field-1)], 
-                                 { index : { "count" : -value } } if (index - #field) % 2 = 0) |
-                                 { floor(index - #field / 2) : { "sum" : +value } } 
-        }
+        my_score in scores_up, merge(
+            index, value in my_score[1..], 
+            { "R10" : { index                   : { "count" : -value } } }  if index <= num        |
+            { "R11" : { ceil((index - num) / 2) : { "count" : -value } } }  if (index-num) % 2 = 1 |
+            { "R11" : { ceil((index - num) / 2) : { "sum"   :  value } } }
+        )
+    )
 where
-    field = keys(first(places));
-
+    num = count(first(places)) - 1; // number of places in list: all except last possible
 
 
 
