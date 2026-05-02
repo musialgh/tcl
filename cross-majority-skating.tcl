@@ -119,6 +119,8 @@ evaluate_round_final_skating(marks, places) =
     report = merge(majority_report, skating_report), // recursive merge does what we want
     places = compute_places(scores_up)               // final scoring delivers final placing
 where
+    // number of places in list: all except last possible
+    num = count(first(places)) - 1;
     // invoke majority system as a basis
     majority_report, majority_places = evaluate_round_final(marks, places),
     // initialize score sequences with single place value obtained from majority evaluation
@@ -134,8 +136,6 @@ where
             { "R11" : { ceil((index - num) / 2) : { "sum"   :  value } } }
         )
     )
-where
-    num = count(first(places)) - 1; // number of places in list: all except last possible
 
 
 
@@ -145,28 +145,29 @@ where
 skating_refine_r10:
     marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
-    ///  
+    /// score list as far as already constructed 
     scores      : { start_no+ : object },
+    /// target place to be resolved next (default value is for start of recursion)
     for_place   : nat = 1
 ->
     scores      : { start_no+ : object },
 
 skating_refine_r10(marks, places, scores, for_place) =
-    { "report" : {}, "scores" : scores }                        if for_place > #field |
-    skating_refine_r10(marks, places, scores, for_place + 1)    if num_candidates < 2 |
-    { "report" : r10_report, "scores" : descend["scores"] }
+    scores                                                      if for_place >= #field |
+    skating_refine_r10(marks, places, scores, for_place + 1)    if num_candidates < 2  |
+    skating_refine_r11(marks, places, r10_scores, for_place)
 where 
     field           = keys(first(places)),
-    placings        = compute_places(scores),
-    num_candidates  = count(placing in placings, placing["pmin"] = for_place),
-    descend         = skating_refine_r11 (marks, places, r10_scores, for_place),
-    report_out      = merge(descend["report"], r10_report),
-where
-    r10_report      = ,
-    r10_scores      = map(start, score in scores, concat(score, { index : value }))
-                      where index = for_place,
-                            value = 0 if placings[start]["pmin"] != for_place |
-                                    -count(dance in places, dance[start]["pval"] <= for_place);
+    r10_places      = compute_places(scores),
+    num_candidates  = count(range in r10_places, range["pmin"] = for_place),
+    // concatenate new R10 column -- only evaluated if r10_scores is needed to invoke skating_refine_r11() above
+    r10_scores      = map(
+        start, my_score in scores,
+        concat(my_score, { for_place : value })
+    where 
+        value = -count(dance in places, dance[start]["pval"] <= for_place) if placings[start]["pmin"] = for_place | 0
+                
+    );
 
 
 
