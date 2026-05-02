@@ -15,9 +15,10 @@ evaluate_dance_elimination(template_evaluate_element):
 evaluate_dance_elimination(marks) = 
     // below, no value expression given in count() => count non-zero values
     // -- i.e. equivalent to count(marks in my_marks["jury"], my_marks)
-    report : map(my_marks in marks, { "count" : count(my_marks["jury"]) }),
-    /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } };
+    report = map(my_marks in marks, { "count" : count(my_marks["jury"]) }),
+    // negative report values can be used to obtain placing (higher count is better)
+    // -- basic scalar arithmetics, such as prefix minus, are defined element-wise as a language feature
+    places = compute_places(-report);
 
 
 
@@ -32,14 +33,16 @@ evaluate_dance_final(template_evaluate_element):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_dance_final(marks) = 
-    report : map(
+    report = map(
         my_marks in marks, 
         concat(
             place in 1..num_starts-1,
             { place : count_and_sum(place, my_marks["jury"]) }
         )
     ),
-    score : map(
+    places = compute_places(score)
+where
+    score = map(
         my_no, my_marks in marks, 
         concat(
             place in 1..num_starts-1,
@@ -64,15 +67,15 @@ evaluate_round_elimination(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_elimination(marks, places) = 
-    report : map(
+    report = map(
         my_no in field,
         { "count" : sum(dance in marks, count(dance[my_no]["jury"]) }
     ),
     // more crosses is better => must negate report values
     //  -- basic scalar arithmetics, such as prefix minus, are defined element-wise as a language feature
-    places : compute_places(-report);
+    places = compute_places(-report);
 where
-    field = keys(first(places)) // returns object of all key : key mappings (start numbers)
+    field = keys(first(places)); // returns object of all key : key mappings (start numbers)
 
 
 
@@ -89,14 +92,14 @@ evaluate_round_final(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_final(marks, places) = 
-    report : map(
+    report = map(
         my_no in field, 
         { "places-sum" : sum(dance in places, dance[my_no]["pval"]) }
     ),
     // perform ordering by sum (lower is better)
-    places : compute_places(report);
+    places = compute_places(report);
 where
-    field = keys(first(places))
+    field = keys(first(places));
 
 
 
@@ -113,8 +116,8 @@ evaluate_round_final_skating(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_final_skating(marks, places) = 
-    report : merge(maj_report, child_report),
-    places : compute_places(child_scores)
+    report = merge(maj_report, child_report),
+    places = compute_places(child_scores)
 where
     maj_report, maj_places = evaluate_round_final(marks, places),
     scores = map(start in maj_places, { 0 : start["pval"] });
@@ -122,13 +125,16 @@ where
 
 
 
+/// Refine assignment of places starting with <for place> according to skating rules, whenever neccessary.
+/// The implementation of the function body will just apply R10 to <for_place>,
+/// but then recursively invoke either R10 on the next place, or R11 on the same.
 skating_refine_r10:
     marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
+    ///  
     scores      : { start_no+ : object },
     for_place   : nat = 1
 ->
-    report      : { start_no+ : { colum-tree+ : any } },            
     scores      : { start_no+ : object },
 
 skating_refine_r10(marks, places, scores, for_place) =
@@ -180,8 +186,8 @@ compute_places(scores) =
 count_and_sum: place : nat, marks : { adjudicator_short+ : nat } -> count : nat, sum : nat;
 
 count_and_sum(place, marks) =
-    count:     #relevant    if is_majority | 0,
-    sum:    sum(relevant)   if is_majority | 0
+    count =  #relevant       if is_majority | 0,
+    sum   =  sum(relevant)   if is_majority | 0
 where
     relevant    = filter(mark in marks, mark <= place),
     is_majority = #relevant > (#marks / 2);
