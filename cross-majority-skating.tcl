@@ -73,7 +73,7 @@ evaluate_round_elimination(marks, places) =
     ),
     // more crosses is better => must negate report values
     //  -- basic scalar arithmetics, such as prefix minus, are defined element-wise as a language feature
-    places = compute_places(-report);
+    places = compute_places(-report)
 where
     field = keys(first(places)); // returns object of all key : key mappings (start numbers)
 
@@ -97,7 +97,7 @@ evaluate_round_final(marks, places) =
         { "places-sum" : sum(dance in places, dance[my_no]["pval"]) }
     ),
     // perform ordering by sum (lower is better)
-    places = compute_places(report);
+    places = compute_places(report)
 where
     field = keys(first(places));
 
@@ -116,12 +116,28 @@ evaluate_round_final_skating(template_evaluate_round):
     places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
 
 evaluate_round_final_skating(marks, places) = 
-    report = merge(maj_report, child_report),
-    places = compute_places(child_scores)
+    report = merge(majority_report, skating_report), // recursive merge does what we want
+    places = compute_places(scores_up)               // final scoring delivers final placing
 where
-    maj_report, maj_places = evaluate_round_final(marks, places),
-    scores = map(start in maj_places, { 0 : start["pval"] });
-    child_report, child_scores = skating_refine_r10(marks, places, scores);
+    // invoke majority system as a basis
+    majority_report, majority_places = evaluate_round_final(marks, places),
+    // initialize score sequences with single place value obtained from majority evaluation
+    scores_down = map(start in majority_places, { 0 : start["pval"] });
+    // invoke recursive refinement from here
+    scores_up   = skating_refine_r10(marks, places, scores_down);
+    // extract full skating report from obtained skating scores 
+    skating_report = map(
+        my_score in scores_up,
+        { 
+            "R10" : merge(index, value in my_score[1..#field-1], 
+                                 { index : { "count" : -value } }),
+            "R11" : merge(index, value in my_score[#field..3*(#field-1)], 
+                                 { index : { "count" : -value } } if (index - #field) % 2 = 0) |
+                                 { floor(index - #field / 2) : { "sum" : +value } } 
+        }
+where
+    field = keys(first(places));
+
 
 
 
