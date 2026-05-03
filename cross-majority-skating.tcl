@@ -146,11 +146,11 @@ skating_refine_r10:
     marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
     /// score list as far as already constructed 
-    scores      : { start_no+ : { 0 : real, place* : { "R10"? : nat, "R11"? : nat } } },
+    scores      : { start_no+ : { 0 : real, place* : { "R10" : nat, "R11"? : nat } } },
     /// target place to be resolved next (default value is for start of recursion)
     for_place   : nat = 1
 ->
-    scores      : { start_no+ : object };
+    scores      : { start_no+ : { 0 : real, place* : { "R10" : nat, "R11"? : nat } } };
 
 skating_refine_r10(marks, places, scores, for_place) =
     scores                                                       if for_place > #field |
@@ -161,8 +161,16 @@ where
     r10_places      = compute_places(scores),
     candidates      = keys(filter(range in r10_places, range["pmin"] = for_place)),
     // please note that everything below is only computed if <r10_scores> is required above for recursion
-    // compute R10 score values solely for candidate starts
-    r10_values      = map(start in candidates, -count(dance in places, dance[start]["pval"] <= for_place)),
+    // compute counts and sums for same-or-better placings over whole dances
+    r10_rows        = map(
+        start in candidates,
+        count_and_sum(for_place, map(
+            dance in places,
+            dance[start]["pval"]
+        ))    
+    ),
+    // compute R10 score values (negating counts as higher count is better)
+    r10_values      = map(start in r10_rows, { 1 : -start["count"], 2 : +start["sum"] }),
     // determine best value of competing starts
     r10_chosen      = arg_min(r10_values), // returns key -> key mapping(s) for all occurrences of the minimum
     // create a new R10 coulumn using resulting places for all candidates:
@@ -182,15 +190,7 @@ where
 /// Refine assignment of places starting with <for place> according to skating rules, whenever neccessary.
 /// The implementation of the function body will just apply R11 for <for_place>,
 /// but then recursively invoke R10 on the next place
-skating_refine_r11:
-    marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
-    places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
-    /// score list as far as already constructed 
-    scores      : { start_no+ : object },
-    /// target place to be resolved next
-    for_place   : nat
-->
-    scores      : { start_no+ : object };
+skating_refine_r11(skating_refine_r10); // using r10 signature unchanged => no need to re-define
 
 skating_refine_r11(marks, places, scores, for_place) =
     scores                                                       if for_place > #field |
@@ -212,7 +212,7 @@ where
             )
         )    
     ),
-    // compute counts and sums for candidatestarts as for single dances, but only from <for_dance> onwards
+    // compute counts and sums for candidate starts as for single dances, but only from <for_dance> onwards
     r11_rows        = map(
         start in candidates,
         map(
