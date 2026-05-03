@@ -186,8 +186,8 @@ where
     // recursively merge new column with existing score lists
     // -- then, all starts competing for <for_place> have been refined by way of the new column,
     //    while all others are correctly discriminated via the very first column (place-sum) anyway
-    r10_scores = merge(scores, r10_placing),
-    r10_report = merge(report, r10_placing, r10_data);
+    r10_scores      = merge(scores, r10_placing),
+    r10_report      = merge(report, r10_placing, r10_data);
 
         
 /// Refine assignment of places starting with <for place> according to skating rules, whenever neccessary.
@@ -216,21 +216,23 @@ where
         )    
     ),
     // compute counts and sums for candidate starts as for single dances, but only from <for_dance> onwards
-    r11_rows        = map(
+    r11_data        = map(
         start in candidates,
-        map(
-            place in for_place..#field, // map() works since range sets key = value pairs
-            count_and_sum_maj(place, r11_marks)    
-        )    
+        { 
+            "R11" : map(
+                place in for_place..#field,             // map() works since range sets key = value pairs
+                count_and_sum_maj(place, r11_marks)
+            )
+        }
     ),
     // negate counts (higher is better) and use safely-ordered keys -- not relying on "count" < "sum" ;-)
-    r11_values      = map(start in r11_rows, map(place in start, { 1 : -place["count"], 2 : +place["sum"] })),
+    r11_values      = map(start in r11_data, map(place in start["R11"], { 1 : -place["count"], 2 : +place["sum"] })),
     // determine best value of competing starts
     r11_chosen      = arg_min(r11_values), // returns key -> key mapping(s) for all occurrences of the minimum
     // create a new r11 coulumn using resulting places for all candidates:
     // - resulting place is <for_place> for each occurrence of the optimum value
     // - resulting place is next one assignable for all others (discrimination within this group later via R11)
-    r11_column      = map(
+    r11_placing     = map(
         start in candidates, 
         { for_place : { "R11" : for_place               } } if ?r11_chosen[start] | 
         { for_place : { "R11" : for_place + #r11_chosen } }
@@ -238,7 +240,9 @@ where
     // recursively merge new column with existing score lists
     // -- then, all starts competing for <for_place> have been refined by way of the new column,
     //    while all others are correctly discriminated via the very first column (place-sum) anyway
-    r11_scores = merge(scores, r11_column);
+    r11_scores      = merge  (scores, r11_placing),
+    // as <r11_data> may overlap with earlier calls, we need to use replace() instead of merge()
+    r11_report      = replace(report, r11_placing, r11_data);
 
 
 
