@@ -6,6 +6,8 @@ I want to have an interpretor for the new tcl language that I am specifying only
 
 Please create a plan for the implementation first.
 
+
+
 Some clarifications:
 * yes, unary + or - shall definitely be applied recursively
 * first() on an empty object shall generate a runtime error
@@ -36,3 +38,5 @@ Some clarifications:
 ** there, new symbols may be bound, to be used later in the where block  
  
 
+Please note that count_and_sum() is not a built-in function, but implemented in my example.
+Otherwise, please go on with the next step you suggested.

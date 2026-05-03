@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using TclInterpreter.Parsing;
 using TclInterpreter.Execution;
 using TclInterpreter.Json;
@@ -20,70 +22,93 @@ namespace TclInterpreter
 
                 var functionName = args[0];
                 var recursionLimit = 10000;
-                var inputJson = "";
-                var scriptPath = Path.Combine(
-                    Path.GetDirectoryName(typeof(Program).Assembly.Location) ?? "",
-                    "../../functions.tcl"
-                );
+                string? inputJson = null;
+                var scriptPaths = new List<string>();
 
                 // Parse command-line arguments
                 for (int i = 1; i < args.Length; i++)
                 {
-                    if (args[i] == "--recursion-limit" && i + 1 < args.Length)
+                    switch (args[i])
                     {
-                        if (!int.TryParse(args[i + 1], out recursionLimit))
-                        {
-                            Console.Error.WriteLine("Error: Invalid recursion limit");
-                            return 1;
-                        }
-                        i++;
-                    }
-                    else if (args[i] == "--input-file" && i + 1 < args.Length)
-                    {
-                        inputJson = File.ReadAllText(args[i + 1]);
-                        i++;
-                    }
-                    else if (args[i] == "--script" && i + 1 < args.Length)
-                    {
-                        scriptPath = args[i + 1];
-                        i++;
+                        case "--recursion-limit" when i + 1 < args.Length:
+                            if (!int.TryParse(args[++i], out recursionLimit))
+                            {
+                                Console.Error.WriteLine("Error: Invalid recursion limit");
+                                return 1;
+                            }
+                            break;
+                        case "--input-file" when i + 1 < args.Length:
+                            inputJson = File.ReadAllText(args[++i]);
+                            break;
+                        case "--script" when i + 1 < args.Length:
+                            scriptPaths.Add(args[++i]);
+                            break;
                     }
                 }
 
-                // If no input file, read from stdin
-                if (string.IsNullOrEmpty(inputJson))
-                {
+                // If no input file specified, read from stdin
+                if (inputJson == null)
                     inputJson = Console.In.ReadToEnd();
+
+                // If no script paths specified, auto-detect
+                if (scriptPaths.Count == 0)
+                    scriptPaths = FindScriptFiles();
+
+                if (scriptPaths.Count == 0)
+                {
+                    Console.Error.WriteLine("Error: No script files found. Use --script <path>.");
+                    return 1;
                 }
 
-                // Load and parse the TCL DSL program
-                if (!File.Exists(scriptPath))
+                // Parse all script files into a combined program
+                var allDefs = new List<TopLevelDef>();
+                foreach (var path in scriptPaths)
                 {
-                    // Try to find functions in parent directories
-                    scriptPath = FindScriptFile();
-                    if (scriptPath == null)
+                    if (!File.Exists(path))
                     {
-                        Console.Error.WriteLine($"Error: Script file not found");
+                        Console.Error.WriteLine($"Error: Script file not found: {path}");
                         return 1;
                     }
+
+                    var source = File.ReadAllText(path);
+                    var lexer = new Lexer(source);
+                    var tokens = lexer.Tokenize();
+                    var parser = new Parser(tokens);
+                    var program = parser.ParseProgram();
+                    allDefs.AddRange(program.Definitions);
                 }
 
-                var scriptContent = File.ReadAllText(scriptPath);
-                var lexer = new Lexer(scriptContent);
-                var tokens = lexer.Tokenize();
-                var parser = new Parser(tokens);
-                var program = parser.Parse();
+                var combined = new ProgramNode(allDefs);
 
-                // Execute the function
+                // Execute
                 var inputs = JsonBridge.DeserializeParameters(inputJson);
-                var executor = new Executor(program, recursionLimit);
+                var executor = new Executor(combined, recursionLimit);
                 var result = executor.ExecuteFunction(functionName, inputs);
 
-                // Output the result as JSON
+                // Output
                 var outputJson = JsonBridge.SerializeResult(result);
                 Console.WriteLine(outputJson);
-
                 return 0;
+            }
+            catch (LexicalException ex)
+            {
+                Console.Error.WriteLine($"Lexical error: {ex.Message}");
+                return 2;
+            }
+            catch (ParseException ex)
+            {
+                Console.Error.WriteLine($"Parse error: {ex.Message}");
+                return 3;
+            }
+            catch (Execution.ExecutionException ex)
+            {
+                Console.Error.WriteLine($"Runtime error: {ex.Message}");
+                return 4;
+            }
+            catch (JsonBridgeException ex)
+            {
+                Console.Error.WriteLine($"JSON error: {ex.Message}");
+                return 5;
             }
             catch (Exception ex)
             {
@@ -99,30 +124,37 @@ namespace TclInterpreter
             Console.WriteLine("Options:");
             Console.WriteLine("  --recursion-limit <N>     Maximum recursion depth (default: 10000)");
             Console.WriteLine("  --input-file <path>       Read input from file (default: stdin)");
-            Console.WriteLine("  --script <path>           Path to TCL script (default: auto-detect)");
+            Console.WriteLine("  --script <path>           Path to TCL script (repeatable; default: auto-detect)");
             Console.WriteLine();
             Console.WriteLine("Examples:");
             Console.WriteLine("  tcl evaluate_dance_elimination < input.json");
             Console.WriteLine("  tcl compute_places --input-file marks.json --recursion-limit 5000");
+            Console.WriteLine("  tcl evaluate_round_final_skating --script adjudication.tcl --script cross-majority-skating.tcl < input.json");
         }
 
-        static string? FindScriptFile()
+        /// <summary>
+        /// Auto-detect .tcl files by searching common relative locations.
+        /// </summary>
+        static List<string> FindScriptFiles()
         {
-            var searchPaths = new[]
+            var candidates = new[]
             {
-                "./functions.tcl",
-                "../functions.tcl",
-                "../../DSL/adjudication.tcl",
-                "../../DSL/cross-majority-skating.tcl"
+                // From inside interpreter/ directory
+                new[] { "../adjudication.tcl", "../cross-majority-skating.tcl" },
+                // From project root
+                new[] { "adjudication.tcl", "cross-majority-skating.tcl" },
+                // Single combined file
+                new[] { "functions.tcl" },
+                new[] { "../functions.tcl" },
             };
 
-            foreach (var path in searchPaths)
+            foreach (var set in candidates)
             {
-                if (File.Exists(path))
-                    return Path.GetFullPath(path);
+                if (set.All(File.Exists))
+                    return set.Select(Path.GetFullPath).ToList();
             }
 
-            return null;
+            return new List<string>();
         }
     }
 }

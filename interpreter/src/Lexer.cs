@@ -1,102 +1,171 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text;
 
 namespace TclInterpreter.Parsing
 {
+    public enum TokenType
+    {
+        // Literals
+        IntLiteral, RealLiteral, StringLiteral, Identifier,
+
+        // Type keywords
+        KwBool, KwInt, KwReal, KwNat, KwNum, KwObject, KwAny,
+
+        // Other keywords
+        KwWhere, KwIf, KwIn, KwImport, KwAs, KwTrue, KwFalse,
+
+        // Punctuation
+        LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
+        Comma, Colon, Semicolon, Hash, Pipe,
+
+        // Operators
+        Plus, Minus, Star, Slash, Question,
+        Equals, Less, Greater, LessEqual, GreaterEqual,
+        Arrow,      // ->
+        DotDot,     // ..
+
+        // Special
+        Eof
+    }
+
+    public record Token(TokenType Type, string Value, int Line, int Column)
+    {
+        public override string ToString() => $"{Type}('{Value}') at {Line}:{Column}";
+    }
+
+    public class LexicalException : Exception
+    {
+        public LexicalException(string message) : base(message) { }
+    }
+
     /// <summary>
     /// Tokenizes TCL DSL source code into a stream of tokens.
     /// </summary>
     public class Lexer
     {
         private readonly string _source;
-        private int _position;
+        private int _pos;
         private int _line;
-        private int _column;
+        private int _col;
 
         public Lexer(string source)
         {
             _source = source;
-            _position = 0;
+            _pos = 0;
             _line = 1;
-            _column = 1;
+            _col = 1;
         }
 
-        public IEnumerable<Token> Tokenize()
+        public List<Token> Tokenize()
         {
-            while (_position < _source.Length)
+            var tokens = new List<Token>();
+            while (_pos < _source.Length)
             {
                 SkipWhitespaceAndComments();
-                if (_position >= _source.Length)
+                if (_pos >= _source.Length)
                     break;
 
                 var token = NextToken();
                 if (token != null)
-                    yield return token;
+                    tokens.Add(token);
             }
-
-            yield return new Token(TokenType.Eof, "", _line, _column);
+            tokens.Add(new Token(TokenType.Eof, "", _line, _col));
+            return tokens;
         }
 
         private Token? NextToken()
         {
-            var ch = Current();
+            var ch = Cur();
+            var line = _line;
+            var col = _col;
 
             // Single-character tokens
-            if (ch == '(') return CreateToken(TokenType.LeftParen);
-            if (ch == ')') return CreateToken(TokenType.RightParen);
-            if (ch == '{') return CreateToken(TokenType.LeftBrace);
-            if (ch == '}') return CreateToken(TokenType.RightBrace);
-            if (ch == '[') return CreateToken(TokenType.LeftBracket);
-            if (ch == ']') return CreateToken(TokenType.RightBracket);
-            if (ch == ',') return CreateToken(TokenType.Comma);
-            if (ch == ':') return CreateToken(TokenType.Colon);
-            if (ch == ';') return CreateToken(TokenType.Semicolon);
-            if (ch == '?') return CreateToken(TokenType.Question);
-            if (ch == '+') return CreateTokenOrOperator();
-            if (ch == '*') return CreateToken(TokenType.Star);
-            if (ch == '/') return CreateToken(TokenType.Slash);
-            if (ch == '#') return CreateToken(TokenType.Hash);
+            switch (ch)
+            {
+                case '(': Advance(); return new Token(TokenType.LeftParen, "(", line, col);
+                case ')': Advance(); return new Token(TokenType.RightParen, ")", line, col);
+                case '{': Advance(); return new Token(TokenType.LeftBrace, "{", line, col);
+                case '}': Advance(); return new Token(TokenType.RightBrace, "}", line, col);
+                case '[': Advance(); return new Token(TokenType.LeftBracket, "[", line, col);
+                case ']': Advance(); return new Token(TokenType.RightBracket, "]", line, col);
+                case ',': Advance(); return new Token(TokenType.Comma, ",", line, col);
+                case ':': Advance(); return new Token(TokenType.Colon, ":", line, col);
+                case ';': Advance(); return new Token(TokenType.Semicolon, ";", line, col);
+                case '#': Advance(); return new Token(TokenType.Hash, "#", line, col);
+                case '|': Advance(); return new Token(TokenType.Pipe, "|", line, col);
+                case '*': Advance(); return new Token(TokenType.Star, "*", line, col);
+                case '/': Advance(); return new Token(TokenType.Slash, "/", line, col);
+            }
 
-            // Two-character tokens and operators
+            // + (just plus, no ++ needed)
+            if (ch == '+')
+            {
+                Advance();
+                return new Token(TokenType.Plus, "+", line, col);
+            }
+
+            // - or ->
             if (ch == '-')
             {
                 Advance();
-                if (Current() == '>') { Advance(); return new Token(TokenType.Arrow, "->", _line, _column - 2); }
-                _position--;
-                _column--;
-                return CreateToken(TokenType.Minus);
+                if (Cur() == '>')
+                {
+                    Advance();
+                    return new Token(TokenType.Arrow, "->", line, col);
+                }
+                return new Token(TokenType.Minus, "-", line, col);
             }
 
+            // = (assignment / equality)
             if (ch == '=')
             {
                 Advance();
-                if (Current() == '>') { Advance(); return new Token(TokenType.MapArrow, "=>", _line, _column - 2); }
-                _position--;
-                _column--;
-                return CreateToken(TokenType.Equals);
+                return new Token(TokenType.Equals, "=", line, col);
             }
 
-            if (ch == '<') return CreateComparisonToken();
-            if (ch == '>') return CreateComparisonToken();
+            // < <= 
+            if (ch == '<')
+            {
+                Advance();
+                if (Cur() == '=')
+                {
+                    Advance();
+                    return new Token(TokenType.LessEqual, "<=", line, col);
+                }
+                return new Token(TokenType.Less, "<", line, col);
+            }
 
+            // > >=
+            if (ch == '>')
+            {
+                Advance();
+                if (Cur() == '=')
+                {
+                    Advance();
+                    return new Token(TokenType.GreaterEqual, ">=", line, col);
+                }
+                return new Token(TokenType.Greater, ">", line, col);
+            }
+
+            // ? (key existence operator)
+            if (ch == '?')
+            {
+                Advance();
+                return new Token(TokenType.Question, "?", line, col);
+            }
+
+            // . or ..
             if (ch == '.')
             {
                 Advance();
-                if (char.IsDigit(Current()))
-                {
-                    _position--;
-                    _column--;
-                    return ReadNumber();
-                }
-                if (Current() == '.')
+                if (Cur() == '.')
                 {
                     Advance();
-                    return new Token(TokenType.DotDot, "..", _line, _column - 2);
+                    return new Token(TokenType.DotDot, "..", line, col);
                 }
-                _position--;
-                _column--;
-                return null;
+                // Stand-alone dot — shouldn't occur in valid DSL; treat as error
+                throw new LexicalException($"Unexpected single '.' at line {line}, column {col}");
             }
 
             // String literals
@@ -108,150 +177,118 @@ namespace TclInterpreter.Parsing
             // Identifiers and keywords
             if (char.IsLetter(ch) || ch == '_') return ReadIdentifierOrKeyword();
 
-            throw new LexicalException($"Unexpected character '{ch}' at line {_line}, column {_column}");
-        }
-
-        private Token CreateTokenOrOperator()
-        {
-            var line = _line;
-            var col = _column;
-            Advance();
-            if (Current() == '+') { Advance(); return new Token(TokenType.Plus, "++", line, col); }
-            _position--;
-            _column--;
-            return CreateToken(TokenType.Plus);
-        }
-
-        private Token CreateComparisonToken()
-        {
-            var ch = Current();
-            var line = _line;
-            var col = _column;
-            Advance();
-
-            if (Current() == '=')
-            {
-                Advance();
-                return new Token(ch == '<' ? TokenType.LessEqual : TokenType.GreaterEqual, ch + "=", line, col);
-            }
-
-            return new Token(ch == '<' ? TokenType.Less : TokenType.Greater, ch.ToString(), line, col);
+            throw new LexicalException($"Unexpected character '{ch}' at line {_line}, column {_col}");
         }
 
         private Token ReadString()
         {
             var startLine = _line;
-            var startCol = _column;
+            var startCol = _col;
             Advance(); // skip opening quote
-            var value = "";
+            var sb = new StringBuilder();
 
-            while (_position < _source.Length && Current() != '"')
+            while (_pos < _source.Length && Cur() != '"')
             {
-                if (Current() == '\\')
+                if (Cur() == '\\')
                 {
                     Advance();
-                    if (_position < _source.Length)
+                    if (_pos < _source.Length)
                     {
-                        value += EscapeChar(Current());
+                        sb.Append(Cur() switch
+                        {
+                            'n' => '\n', 't' => '\t', 'r' => '\r',
+                            '\\' => '\\', '"' => '"',
+                            var c => c
+                        });
                         Advance();
                     }
                 }
                 else
                 {
-                    value += Current();
+                    sb.Append(Cur());
                     Advance();
                 }
             }
 
-            if (_position >= _source.Length)
+            if (_pos >= _source.Length)
                 throw new LexicalException($"Unterminated string at line {startLine}, column {startCol}");
 
             Advance(); // skip closing quote
-            return new Token(TokenType.String, value, startLine, startCol);
+            return new Token(TokenType.StringLiteral, sb.ToString(), startLine, startCol);
         }
-
-        private char EscapeChar(char ch) => ch switch
-        {
-            'n' => '\n',
-            't' => '\t',
-            'r' => '\r',
-            '\\' => '\\',
-            '"' => '"',
-            _ => ch
-        };
 
         private Token ReadNumber()
         {
             var startLine = _line;
-            var startCol = _column;
-            var value = "";
+            var startCol = _col;
+            var sb = new StringBuilder();
+            bool hasDot = false;
 
-            while (_position < _source.Length && (char.IsDigit(Current()) || Current() == '.'))
+            while (_pos < _source.Length && (char.IsDigit(Cur()) || (Cur() == '.' && Peek() != '.')))
             {
-                value += Current();
+                if (Cur() == '.') hasDot = true;
+                sb.Append(Cur());
                 Advance();
             }
 
-            return new Token(value.Contains('.') ? TokenType.Real : TokenType.Int, value, startLine, startCol);
+            var value = sb.ToString();
+            return new Token(hasDot ? TokenType.RealLiteral : TokenType.IntLiteral, value, startLine, startCol);
         }
 
         private Token ReadIdentifierOrKeyword()
         {
             var startLine = _line;
-            var startCol = _column;
-            var value = "";
+            var startCol = _col;
+            var sb = new StringBuilder();
 
-            while (_position < _source.Length && (char.IsLetterOrDigit(Current()) || Current() == '_'))
+            while (_pos < _source.Length && (char.IsLetterOrDigit(Cur()) || Cur() == '_'))
             {
-                value += Current();
+                sb.Append(Cur());
                 Advance();
             }
 
-            var type = GetKeywordType(value);
+            var value = sb.ToString();
+            var type = value switch
+            {
+                "where"  => TokenType.KwWhere,
+                "if"     => TokenType.KwIf,
+                "in"     => TokenType.KwIn,
+                "import" => TokenType.KwImport,
+                "as"     => TokenType.KwAs,
+                "true"   => TokenType.KwTrue,
+                "false"  => TokenType.KwFalse,
+                "bool"   => TokenType.KwBool,
+                "int"    => TokenType.KwInt,
+                "real"   => TokenType.KwReal,
+                "nat"    => TokenType.KwNat,
+                "num"    => TokenType.KwNum,
+                "object" => TokenType.KwObject,
+                "any"    => TokenType.KwAny,
+                _        => TokenType.Identifier
+            };
             return new Token(type, value, startLine, startCol);
         }
 
-        private TokenType GetKeywordType(string value) => value switch
-        {
-            "where" => TokenType.Where,
-            "if" => TokenType.If,
-            "in" => TokenType.In,
-            "import" => TokenType.Import,
-            "as" => TokenType.As,
-            "bool" => TokenType.Bool,
-            "int" => TokenType.Int,
-            "real" => TokenType.Real,
-            "nat" => TokenType.Nat,
-            "num" => TokenType.Num,
-            "object" => TokenType.Object,
-            "any" => TokenType.Any,
-            _ => TokenType.Identifier
-        };
-
         private void SkipWhitespaceAndComments()
         {
-            while (_position < _source.Length)
+            while (_pos < _source.Length)
             {
-                if (char.IsWhiteSpace(Current()))
+                if (char.IsWhiteSpace(Cur()))
                 {
                     Advance();
                 }
-                else if (Current() == '/' && Peek() == '/')
+                else if (Cur() == '/' && Peek() == '/')
                 {
-                    // Skip line comment
-                    while (_position < _source.Length && Current() != '\n')
+                    // Line comment (includes /// doc comments)
+                    while (_pos < _source.Length && Cur() != '\n')
                         Advance();
                 }
-                else if (Current() == '/' && Peek() == '*')
+                else if (Cur() == '/' && Peek() == '*')
                 {
-                    // Skip block comment
                     Advance(); Advance();
-                    while (_position < _source.Length && !(Current() == '*' && Peek() == '/'))
+                    while (_pos < _source.Length && !(Cur() == '*' && Peek() == '/'))
                         Advance();
-                    if (_position < _source.Length)
-                    {
-                        Advance(); Advance();
-                    }
+                    if (_pos < _source.Length) { Advance(); Advance(); }
                 }
                 else
                 {
@@ -260,60 +297,17 @@ namespace TclInterpreter.Parsing
             }
         }
 
-        private Token CreateToken(TokenType type)
-        {
-            var token = new Token(type, Current().ToString(), _line, _column);
-            Advance();
-            return token;
-        }
-
-        private char Current() => _position < _source.Length ? _source[_position] : '\0';
-        private char Peek() => _position + 1 < _source.Length ? _source[_position + 1] : '\0';
+        private char Cur() => _pos < _source.Length ? _source[_pos] : '\0';
+        private char Peek() => _pos + 1 < _source.Length ? _source[_pos + 1] : '\0';
 
         private void Advance()
         {
-            if (_position < _source.Length)
+            if (_pos < _source.Length)
             {
-                if (_source[_position] == '\n')
-                {
-                    _line++;
-                    _column = 1;
-                }
-                else
-                {
-                    _column++;
-                }
-                _position++;
+                if (_source[_pos] == '\n') { _line++; _col = 1; }
+                else { _col++; }
+                _pos++;
             }
         }
-    }
-
-    public enum TokenType
-    {
-        // Literals
-        Int, Real, String, Identifier,
-
-        // Keywords
-        Where, If, In, Import, As,
-        Bool, Int, Real, Nat, Num, Object, Any,
-
-        // Punctuation
-        LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
-        Comma, Colon, Semicolon, Question, Hash,
-
-        // Operators
-        Plus, Minus, Star, Slash,
-        Equals, Less, Greater, LessEqual, GreaterEqual,
-        Arrow, MapArrow, DotDot,
-
-        // Special
-        Eof
-    }
-
-    public record Token(TokenType Type, string Value, int Line, int Column);
-
-    public class LexicalException : Exception
-    {
-        public LexicalException(string message) : base(message) { }
     }
 }

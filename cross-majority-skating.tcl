@@ -213,7 +213,7 @@ where
             my_marks in dance,
             merge(
                 jkey, my_mark in my_marks,
-                { { jkey, dkey } : my_mark } // objects are sortable and may therefore serve as keys
+                { { 1 : jkey, 2 : dkey } : my_mark } // objects are sortable and may therefore serve as keys
             )
         )    
     ),
@@ -257,7 +257,7 @@ where
 compute_places: 
     scores : { start_no+ : object } 
 ->
-    places : { start_no+ : { "pmin" : int, "pmax" : int, "pval" : real } } };
+    places : { start_no+ : { "pmin" : int, "pmax" : int, "pval" : real } };
 
 compute_places(scores) =
     map(
@@ -288,7 +288,7 @@ where
 count_and_sum_maj(count_and_sum); // re-use signature
 
 count_and_sum_maj(place, marks) =
-    data if data["count"] > (#marks / 2) | { "count" = 0, "sum" = 0 }
+    data if data["count"] > (#marks / 2) | { "count" : 0, "sum" : 0 }
 where
     data = count_and_sum(place, marks)
 

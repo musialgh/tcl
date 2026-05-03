@@ -72,14 +72,14 @@ namespace TclInterpreter.Typing
             // Check that all fields in 'other' exist in this object
             foreach (var (fieldName, (otherType, otherCard)) in otherObj.Fields)
             {
-                if (!Fields.TryGetValue(fieldName, out var (thisType, thisCard)))
+                if (!Fields.TryGetValue(fieldName, out var thisField))
                     return false;
 
-                if (!thisType.IsAssignableTo(otherType))
+                if (!thisField.Type.IsAssignableTo(otherType))
                     return false;
 
                 // Cardinality compatibility
-                if (!IsCardinalityCompatible(thisCard, otherCard))
+                if (!IsCardinalityCompatible(thisField.Cardinality, otherCard))
                     return false;
             }
 
@@ -142,21 +142,23 @@ namespace TclInterpreter.Typing
     /// </summary>
     public abstract class DslValue
     {
-        public abstract DslType GetType();
+        public abstract DslType GetDslType();
     }
 
     public class NumericValue : DslValue
     {
         public decimal Value { get; }
-        private readonly string _type; // "num", "real", "int", "nat"
+        public string NumericType { get; } // "num", "real", "int", "nat"
 
         public NumericValue(decimal value, string type = "num")
         {
             Value = value;
-            _type = type;
+            NumericType = type;
         }
 
-        public override DslType GetType() => new PrimitiveTypeInfo(_type);
+        public override DslType GetDslType() => new PrimitiveTypeInfo(NumericType);
+
+        public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public class BoolValue : DslValue
@@ -168,7 +170,9 @@ namespace TclInterpreter.Typing
             Value = value;
         }
 
-        public override DslType GetType() => new PrimitiveTypeInfo("bool");
+        public override DslType GetDslType() => new PrimitiveTypeInfo("bool");
+
+        public override string ToString() => Value ? "true" : "false";
     }
 
     public class StringValue : DslValue
@@ -180,7 +184,9 @@ namespace TclInterpreter.Typing
             Value = value;
         }
 
-        public override DslType GetType() => new PrimitiveTypeInfo("string");
+        public override DslType GetDslType() => new PrimitiveTypeInfo("string");
+
+        public override string ToString() => $"\"{Value}\"";
     }
 
     public class ObjectValue : DslValue
@@ -192,7 +198,7 @@ namespace TclInterpreter.Typing
 
         public ObjectValue()
         {
-            Fields = new SortedDictionary<object, DslValue>(new ObjectKeyComparer());
+            Fields = new SortedDictionary<object, DslValue>(ObjectKeyComparer.Instance);
         }
 
         public ObjectValue(SortedDictionary<object, DslValue> fields)
@@ -200,37 +206,111 @@ namespace TclInterpreter.Typing
             Fields = fields;
         }
 
-        public override DslType GetType() => new PrimitiveTypeInfo("object");
+        public override DslType GetDslType() => new PrimitiveTypeInfo("object");
+
+        public override string ToString() => $"{{object with {Fields.Count} fields}}";
     }
 
     /// <summary>
-    /// Custom comparer for object keys: numeric keys sort lower than string keys.
+    /// Custom comparer for object keys.
+    /// Ordering: numeric keys &lt; string keys &lt; ObjectValue keys.
+    /// ObjectValue keys are compared via depth-first traversal of their values.
     /// </summary>
     public class ObjectKeyComparer : IComparer<object>
     {
+        public static readonly ObjectKeyComparer Instance = new();
+
         public int Compare(object? x, object? y)
         {
-            if (x is null && y is null) return 0;
+            if (ReferenceEquals(x, y)) return 0;
             if (x is null) return -1;
             if (y is null) return 1;
 
-            // Numeric keys sort lower than string keys
-            var xIsNumeric = x is long or int or decimal;
-            var yIsNumeric = y is long or int or decimal;
+            int xRank = KeyRank(x);
+            int yRank = KeyRank(y);
+            if (xRank != yRank) return xRank.CompareTo(yRank);
 
-            if (xIsNumeric && !yIsNumeric) return -1;
-            if (!xIsNumeric && yIsNumeric) return 1;
-
-            // Both numeric or both string
-            if (xIsNumeric && yIsNumeric)
+            return xRank switch
             {
-                var xNum = Convert.ToDecimal(x);
-                var yNum = Convert.ToDecimal(y);
-                return xNum.CompareTo(yNum);
-            }
-
-            // Both strings
-            return string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal);
+                0 => CompareNumeric(x, y),
+                1 => string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal),
+                2 => CompareObjects((ObjectValue)x, (ObjectValue)y),
+                _ => 0
+            };
         }
+
+        /// <summary>0 = numeric, 1 = string, 2 = object</summary>
+        private static int KeyRank(object k) => k switch
+        {
+            long or int or decimal => 0,
+            string => 1,
+            ObjectValue => 2,
+            _ => 3
+        };
+
+        private static int CompareNumeric(object x, object y)
+        {
+            var a = Convert.ToDecimal(x);
+            var b = Convert.ToDecimal(y);
+            return a.CompareTo(b);
+        }
+
+        /// <summary>
+        /// Compare two ObjectValue keys by depth-first traversal of their values
+        /// in increasing key order (values only, not keys).
+        /// </summary>
+        private static int CompareObjects(ObjectValue a, ObjectValue b)
+        {
+            using var ea = a.Fields.GetEnumerator();
+            using var eb = b.Fields.GetEnumerator();
+
+            while (true)
+            {
+                bool ha = ea.MoveNext();
+                bool hb = eb.MoveNext();
+                if (!ha && !hb) return 0;
+                if (!ha) return -1;  // fewer keys = smaller
+                if (!hb) return 1;
+
+                // Compare keys first (to establish traversal order alignment)
+                int kc = Instance.Compare(ea.Current.Key, eb.Current.Key);
+                if (kc != 0) return kc;
+
+                // Compare values
+                int vc = CompareValues(ea.Current.Value, eb.Current.Value);
+                if (vc != 0) return vc;
+            }
+        }
+
+        /// <summary>
+        /// Compare two DslValues for ordering.
+        /// </summary>
+        public static int CompareValues(DslValue a, DslValue b)
+        {
+            // Same type comparisons
+            if (a is NumericValue an && b is NumericValue bn)
+                return an.Value.CompareTo(bn.Value);
+
+            if (a is BoolValue ab && b is BoolValue bb)
+                return ab.Value.CompareTo(bb.Value);
+
+            if (a is StringValue sa && b is StringValue sb)
+                return string.Compare(sa.Value, sb.Value, StringComparison.Ordinal);
+
+            if (a is ObjectValue ao && b is ObjectValue bo)
+                return CompareObjects(ao, bo);
+
+            // Cross-type: numeric < bool < string < object
+            return ValueRank(a).CompareTo(ValueRank(b));
+        }
+
+        private static int ValueRank(DslValue v) => v switch
+        {
+            NumericValue => 0,
+            BoolValue => 1,
+            StringValue => 2,
+            ObjectValue => 3,
+            _ => 4
+        };
     }
 }

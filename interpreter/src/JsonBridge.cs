@@ -1,15 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Text.Json;
 using TclInterpreter.Typing;
 
 namespace TclInterpreter.Json
 {
+    public class JsonBridgeException : Exception
+    {
+        public JsonBridgeException(string message) : base(message) { }
+    }
+
     /// <summary>
     /// Bridges between JSON and DSL values.
     /// </summary>
-    public class JsonBridge
+    public static class JsonBridge
     {
+        // ================================================================
+        //  JSON -> DslValue
+        // ================================================================
+
         public static DslValue FromJson(JsonElement element)
         {
             return element.ValueKind switch
@@ -20,86 +32,9 @@ namespace TclInterpreter.Json
                 JsonValueKind.False => new BoolValue(false),
                 JsonValueKind.Object => ConvertObject(element),
                 JsonValueKind.Array => ConvertArray(element),
-                JsonValueKind.Null => new ObjectValue(), // Empty object for null
+                JsonValueKind.Null => new ObjectValue(), // null -> empty object
                 _ => throw new JsonBridgeException($"Unsupported JSON value kind: {element.ValueKind}")
             };
-        }
-
-        public static JsonElement ToJson(DslValue value)
-        {
-            using var doc = JsonDocument.Parse(SerializeToJsonString(value));
-            return doc.RootElement.Clone();
-        }
-
-        private static string SerializeToJsonString(DslValue value)
-        {
-            return value switch
-            {
-                NumericValue nv => nv.Value.ToString("G29"), // Preserve precision
-                BoolValue bv => bv.Value ? "true" : "false",
-                StringValue sv => JsonSerializer.Serialize(sv.Value),
-                ObjectValue ov => SerializeObject(ov),
-                _ => throw new JsonBridgeException($"Unknown DSL value type: {value.GetType().Name}")
-            };
-        }
-
-        private static string SerializeObject(ObjectValue ov)
-        {
-            var dict = new Dictionary<string, object>();
-
-            foreach (var (key, value) in ov.Fields)
-            {
-                if (key is not (long or int or string))
-                    throw new JsonBridgeException($"Object keys may only be strings or numbers, got: {key.GetType().Name}");
-
-                var keyStr = key.ToString() ?? "";
-                dict[keyStr] = SerializeToJsonString(value);
-            }
-
-            return JsonSerializer.Serialize(dict);
-        }
-
-        private static DslValue ConvertNumber(JsonElement element)
-        {
-            if (element.TryGetInt64(out var longValue))
-                return new NumericValue(longValue, "int");
-
-            if (element.TryGetDecimal(out var decValue))
-                return new NumericValue(decValue, "real");
-
-            throw new JsonBridgeException("Could not convert JSON number");
-        }
-
-        private static DslValue ConvertObject(JsonElement element)
-        {
-            var result = new ObjectValue();
-
-            foreach (var property in element.EnumerateObject())
-            {
-                object key;
-                if (long.TryParse(property.Name, out var numKey))
-                    key = numKey;
-                else
-                    key = property.Name;
-
-                result.Fields[key] = FromJson(property.Value);
-            }
-
-            return result;
-        }
-
-        private static DslValue ConvertArray(JsonElement element)
-        {
-            var result = new ObjectValue();
-            var index = 0;
-
-            foreach (var item in element.EnumerateArray())
-            {
-                result.Fields[index] = FromJson(item);
-                index++;
-            }
-
-            return result;
         }
 
         public static Dictionary<string, DslValue> DeserializeParameters(string json)
@@ -111,27 +46,126 @@ namespace TclInterpreter.Json
                 throw new JsonBridgeException("Input must be a JSON object");
 
             var parameters = new Dictionary<string, DslValue>();
-
             foreach (var property in root.EnumerateObject())
-            {
                 parameters[property.Name] = FromJson(property.Value);
-            }
 
             return parameters;
         }
 
-        public static string SerializeResult(DslValue result)
+        private static DslValue ConvertNumber(JsonElement element)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = SerializeToJsonString(result);
-            
-            using var doc = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(doc.RootElement, options);
-        }
-    }
+            // Try integer first
+            if (element.TryGetInt64(out var longValue))
+            {
+                // Check if the raw text contains a decimal point
+                var raw = element.GetRawText();
+                if (!raw.Contains('.'))
+                    return new NumericValue(longValue, "int");
+            }
+            if (element.TryGetDecimal(out var decValue))
+                return new NumericValue(decValue, "real");
 
-    public class JsonBridgeException : Exception
-    {
-        public JsonBridgeException(string message) : base(message) { }
+            throw new JsonBridgeException("Could not convert JSON number");
+        }
+
+        private static DslValue ConvertObject(JsonElement element)
+        {
+            var result = new ObjectValue();
+            foreach (var property in element.EnumerateObject())
+            {
+                // Try to parse key as integer
+                object key;
+                if (long.TryParse(property.Name, out var numKey))
+                    key = numKey;
+                else
+                    key = property.Name;
+
+                result.Fields[key] = FromJson(property.Value);
+            }
+            return result;
+        }
+
+        private static DslValue ConvertArray(JsonElement element)
+        {
+            // Arrays become objects with 0-based integer keys
+            var result = new ObjectValue();
+            long index = 0;
+            foreach (var item in element.EnumerateArray())
+            {
+                result.Fields[index] = FromJson(item);
+                index++;
+            }
+            return result;
+        }
+
+        // ================================================================
+        //  DslValue -> JSON
+        // ================================================================
+
+        public static string SerializeResult(DslValue result, bool indented = true)
+        {
+            using var stream = new MemoryStream();
+            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+            {
+                Indented = indented
+            });
+
+            WriteValue(writer, result);
+            writer.Flush();
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+
+        private static void WriteValue(Utf8JsonWriter writer, DslValue value)
+        {
+            switch (value)
+            {
+                case NumericValue nv:
+                    if (nv.NumericType is "int" or "nat" && nv.Value == Math.Truncate(nv.Value))
+                        writer.WriteNumberValue((long)nv.Value);
+                    else
+                        writer.WriteNumberValue(nv.Value);
+                    break;
+
+                case BoolValue bv:
+                    writer.WriteBooleanValue(bv.Value);
+                    break;
+
+                case StringValue sv:
+                    writer.WriteStringValue(sv.Value);
+                    break;
+
+                case ObjectValue ov:
+                    WriteObject(writer, ov);
+                    break;
+
+                default:
+                    throw new JsonBridgeException($"Cannot serialize DSL value of type {value.GetType().Name}");
+            }
+        }
+
+        private static void WriteObject(Utf8JsonWriter writer, ObjectValue ov)
+        {
+            writer.WriteStartObject();
+
+            foreach (var (key, value) in ov.Fields)
+            {
+                var keyStr = key switch
+                {
+                    long l => l.ToString(CultureInfo.InvariantCulture),
+                    int i => i.ToString(CultureInfo.InvariantCulture),
+                    decimal d => d.ToString(CultureInfo.InvariantCulture),
+                    string s => s,
+                    ObjectValue => throw new JsonBridgeException(
+                        $"Object keys may only be strings or numbers for JSON serialization, got object key"),
+                    _ => throw new JsonBridgeException(
+                        $"Object keys may only be strings or numbers, got: {key.GetType().Name}")
+                };
+
+                writer.WritePropertyName(keyStr);
+                WriteValue(writer, value);
+            }
+
+            writer.WriteEndObject();
+        }
     }
 }

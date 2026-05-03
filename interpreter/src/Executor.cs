@@ -1,272 +1,35 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TclInterpreter.Parsing;
 using TclInterpreter.Typing;
 
 namespace TclInterpreter.Execution
 {
-    /// <summary>
-    /// Executes AST nodes and evaluates expressions.
-    /// </summary>
-    public class Executor
+    public class ExecutionException : Exception
     {
-        private readonly Dictionary<string, FunctionDefinition> _functions;
-        private int _recursionDepth;
-        private readonly int _maxRecursionDepth;
-        private readonly ExecutionContext _context;
-
-        public Executor(Program program, int maxRecursionDepth = 10000)
-        {
-            _maxRecursionDepth = maxRecursionDepth;
-            _recursionDepth = 0;
-            _context = new ExecutionContext();
-            _functions = new Dictionary<string, FunctionDefinition>();
-
-            // Index all functions
-            foreach (var func in program.Functions)
-            {
-                _functions[func.Name] = func;
-            }
-        }
-
-        public DslValue ExecuteFunction(string name, Dictionary<string, DslValue> inputs)
-        {
-            if (!_functions.TryGetValue(name, out var func))
-                throw new ExecutionException($"Function '{name}' not found");
-
-            _recursionDepth++;
-            if (_recursionDepth > _maxRecursionDepth)
-                throw new ExecutionException($"Recursion depth exceeded (max: {_maxRecursionDepth})");
-
-            try
-            {
-                _context.PushScope();
-
-                // Bind input parameters
-                foreach (var (paramName, value) in inputs)
-                {
-                    _context.SetVariable(paramName, value);
-                }
-
-                // Execute function body
-                var result = ExecuteFunctionBody(func.Body);
-
-                _context.PopScope();
-                return result;
-            }
-            finally
-            {
-                _recursionDepth--;
-            }
-        }
-
-        private DslValue ExecuteFunctionBody(FunctionBody body)
-        {
-            var results = new Dictionary<string, DslValue>();
-
-            // Execute assignments before where clause
-            foreach (var assignment in body.BeforeWhere)
-            {
-                var value = EvaluateExpression(assignment.Value);
-                results[assignment.Target] = value;
-                _context.SetVariable(assignment.Target, value);
-            }
-
-            // Execute where clause if present
-            if (body.AfterWhere != null)
-            {
-                foreach (var assignment in body.AfterWhere)
-                {
-                    var value = EvaluateExpression(assignment.Value);
-                    results[assignment.Target] = value;
-                    _context.SetVariable(assignment.Target, value);
-                }
-            }
-
-            // Return results as an object
-            var resultObj = new ObjectValue();
-            foreach (var (key, value) in results)
-            {
-                resultObj.Fields[key] = value;
-            }
-
-            return resultObj;
-        }
-
-        private DslValue EvaluateExpression(Expression expr)
-        {
-            return expr switch
-            {
-                IntLiteral il => new NumericValue(il.Value, "int"),
-                RealLiteral rl => new NumericValue(rl.Value, "real"),
-                StringLiteral sl => new StringValue(sl.Value),
-                BoolLiteral bl => new BoolValue(bl.Value),
-                Identifier id => _context.GetVariable(id.Name) ?? throw new ExecutionException($"Undefined variable: {id.Name}"),
-                UnaryOp uo => EvaluateUnaryOp(uo),
-                BinaryOp bo => EvaluateBinaryOp(bo),
-                FunctionCall fc => EvaluateFunctionCall(fc),
-                Indexing idx => EvaluateIndexing(idx),
-                ObjectLiteral ol => EvaluateObjectLiteral(ol),
-                ConditionalExpr ce => EvaluateConditional(ce),
-                _ => throw new ExecutionException($"Unknown expression type: {expr.GetType().Name}")
-            };
-        }
-
-        private DslValue EvaluateUnaryOp(UnaryOp op)
-        {
-            var operand = EvaluateExpression(op.Operand);
-
-            return op.Operator switch
-            {
-                "-" => ApplyUnaryNegation(operand),
-                "+" => operand,
-                "#" => GetCardinality(operand),
-                "?" => new BoolValue(operand is not null),
-                _ => throw new ExecutionException($"Unknown unary operator: {op.Operator}")
-            };
-        }
-
-        private DslValue ApplyUnaryNegation(DslValue operand)
-        {
-            if (operand is NumericValue nv)
-                return new NumericValue(-nv.Value, "real");
-
-            if (operand is ObjectValue ov)
-            {
-                var result = new ObjectValue();
-                foreach (var (key, value) in ov.Fields)
-                {
-                    result.Fields[key] = ApplyUnaryNegation(value);
-                }
-                return result;
-            }
-
-            throw new ExecutionException("Cannot negate non-numeric value");
-        }
-
-        private DslValue GetCardinality(DslValue value)
-        {
-            if (value is ObjectValue ov)
-                return new NumericValue(ov.Fields.Count, "int");
-
-            throw new ExecutionException("Cardinality (#) only applies to objects");
-        }
-
-        private DslValue EvaluateBinaryOp(BinaryOp op)
-        {
-            var left = EvaluateExpression(op.Left);
-            var right = EvaluateExpression(op.Right);
-
-            // Numeric operations
-            if (left is NumericValue lnv && right is NumericValue rnv)
-            {
-                return op.Operator switch
-                {
-                    "+" => new NumericValue(lnv.Value + rnv.Value, "real"),
-                    "-" => new NumericValue(lnv.Value - rnv.Value, "real"),
-                    "*" => new NumericValue(lnv.Value * rnv.Value, "real"),
-                    "/" => new NumericValue(lnv.Value / rnv.Value, "real"),
-                    "<" => new BoolValue(lnv.Value < rnv.Value),
-                    ">" => new BoolValue(lnv.Value > rnv.Value),
-                    "<=" => new BoolValue(lnv.Value <= rnv.Value),
-                    ">=" => new BoolValue(lnv.Value >= rnv.Value),
-                    "=" => new BoolValue(lnv.Value == rnv.Value),
-                    _ => throw new ExecutionException($"Unknown binary operator: {op.Operator}")
-                };
-            }
-
-            throw new ExecutionException($"Cannot apply {op.Operator} to {left.GetType().TypeName} and {right.GetType().TypeName}");
-        }
-
-        private DslValue EvaluateFunctionCall(FunctionCall fc)
-        {
-            // TODO: Implement built-in functions and user function calls
-            throw new NotImplementedException("Function calls not yet implemented");
-        }
-
-        private DslValue EvaluateIndexing(Indexing idx)
-        {
-            var obj = EvaluateExpression(idx.Object);
-            var index = EvaluateExpression(idx.Index);
-
-            if (obj is not ObjectValue ov)
-                throw new ExecutionException("Cannot index non-object");
-
-            object? key = index switch
-            {
-                NumericValue nv => nv.Value,
-                StringValue sv => sv.Value,
-                _ => throw new ExecutionException("Index must be numeric or string")
-            };
-
-            if (ov.Fields.TryGetValue(key, out var value))
-                return value;
-
-            throw new ExecutionException($"Key '{key}' not found in object");
-        }
-
-        private DslValue EvaluateObjectLiteral(ObjectLiteral ol)
-        {
-            var result = new ObjectValue();
-
-            foreach (var (keyExpr, valueExpr) in ol.Fields)
-            {
-                var keyVal = EvaluateExpression(keyExpr);
-                var key = keyVal switch
-                {
-                    NumericValue nv => (object)nv.Value,
-                    StringValue sv => sv.Value,
-                    _ => throw new ExecutionException("Object keys must be numeric or string")
-                };
-
-                var value = EvaluateExpression(valueExpr);
-                result.Fields[key] = value;
-            }
-
-            return result;
-        }
-
-        private DslValue EvaluateConditional(ConditionalExpr ce)
-        {
-            var condition = EvaluateExpression(ce.Condition);
-
-            if (condition is BoolValue bv && bv.Value)
-                return EvaluateExpression(ce.ThenExpr);
-
-            if (ce.ElseExpr != null)
-                return EvaluateExpression(ce.ElseExpr);
-
-            throw new ExecutionException("Conditional expression failed and no else branch provided");
-        }
+        public ExecutionException(string message) : base(message) { }
     }
 
-    public class ExecutionContext
+    public class Environment
     {
-        private readonly Stack<Dictionary<string, DslValue>> _scopes;
+        private readonly Stack<Dictionary<string, DslValue>> _scopes = new();
 
-        public ExecutionContext()
-        {
-            _scopes = new Stack<Dictionary<string, DslValue>>();
-            _scopes.Push(new Dictionary<string, DslValue>());
-        }
-
-        public void PushScope()
+        public Environment()
         {
             _scopes.Push(new Dictionary<string, DslValue>());
         }
+
+        public void PushScope() => _scopes.Push(new Dictionary<string, DslValue>());
 
         public void PopScope()
         {
-            if (_scopes.Count > 1)
-                _scopes.Pop();
+            if (_scopes.Count > 1) _scopes.Pop();
         }
 
-        public void SetVariable(string name, DslValue value)
-        {
-            _scopes.Peek()[name] = value;
-        }
+        public void Set(string name, DslValue value) => _scopes.Peek()[name] = value;
 
-        public DslValue? GetVariable(string name)
+        public DslValue? Get(string name)
         {
             foreach (var scope in _scopes)
             {
@@ -277,8 +40,668 @@ namespace TclInterpreter.Execution
         }
     }
 
-    public class ExecutionException : Exception
+    public class LazyBinding
     {
-        public ExecutionException(string message) : base(message) { }
+        private readonly Func<DslValue> _evaluate;
+        private DslValue? _cached;
+        private bool _evaluated;
+        private bool _evaluating;
+
+        public LazyBinding(Func<DslValue> evaluate)
+        {
+            _evaluate = evaluate;
+        }
+
+        public DslValue Value
+        {
+            get
+            {
+                if (_evaluated) return _cached!;
+                if (_evaluating)
+                    throw new ExecutionException("Circular dependency in where-clause bindings");
+                _evaluating = true;
+                _cached = _evaluate();
+                _evaluated = true;
+                _evaluating = false;
+                return _cached!;
+            }
+        }
+    }
+
+    internal class LazyValue : DslValue
+    {
+        public LazyBinding Binding { get; }
+        public LazyValue(LazyBinding binding) { Binding = binding; }
+        public override DslType GetDslType() =>
+            throw new ExecutionException("LazyValue accessed before resolution");
+    }
+
+    public class Executor
+    {
+        private readonly Dictionary<string, FunctionDef> _functions = new();
+        private readonly Dictionary<string, SignatureDef> _signatures = new();
+        private int _recursionDepth;
+        private readonly int _maxRecursionDepth;
+
+        public Executor(ProgramNode program, int maxRecursionDepth = 10000)
+        {
+            _maxRecursionDepth = maxRecursionDepth;
+            foreach (var def in program.Definitions)
+            {
+                switch (def)
+                {
+                    case FunctionDef fd:
+                        _functions[fd.Name] = fd;
+                        if (fd.Signature != null) _signatures[fd.Name] = fd.Signature;
+                        break;
+                    case SignatureDef sd:
+                        _signatures[sd.Name] = sd;
+                        break;
+                }
+            }
+        }
+
+        public DslValue ExecuteFunction(string name, Dictionary<string, DslValue> inputs)
+        {
+            if (!_functions.TryGetValue(name, out var func))
+                throw new ExecutionException($"Function '{name}' not found");
+            return CallFunction(func, inputs);
+        }
+
+        private DslValue CallFunction(FunctionDef func, Dictionary<string, DslValue> namedArgs)
+        {
+            _recursionDepth++;
+            if (_recursionDepth > _maxRecursionDepth)
+                throw new ExecutionException($"Recursion depth exceeded (max: {_maxRecursionDepth})");
+            try
+            {
+                var env = new Environment();
+                for (int i = 0; i < func.ImplParams.Count; i++)
+                {
+                    var p = func.ImplParams[i];
+                    if (namedArgs.TryGetValue(p, out var v))
+                        env.Set(p, v);
+                    else
+                    {
+                        var dv = GetDefaultValue(func.Name, p);
+                        if (dv != null) env.Set(p, dv);
+                    }
+                }
+                // Provide num_starts convenience variable
+                if (namedArgs.TryGetValue("marks", out var mv) && mv is ObjectValue mo)
+                {
+                    var fe = mo.Fields.Values.FirstOrDefault();
+                    if (fe is ObjectValue fo)
+                        env.Set("num_starts", new NumericValue(fo.Fields.Count, "int"));
+                }
+                return ExecuteBody(func.Body, env);
+            }
+            finally { _recursionDepth--; }
+        }
+
+        private DslValue? GetDefaultValue(string funcName, string paramName)
+        {
+            if (!_signatures.TryGetValue(funcName, out var sig)) return null;
+            foreach (var p in sig.Inputs)
+                if (p.Name == paramName && p.DefaultValue != null)
+                    return Eval(p.DefaultValue, new Environment());
+            if (sig.CopyFrom != null && _signatures.TryGetValue(sig.CopyFrom, out var src))
+                foreach (var p in src.Inputs)
+                    if (p.Name == paramName && p.DefaultValue != null)
+                        return Eval(p.DefaultValue, new Environment());
+            return null;
+        }
+
+        private DslValue ExecuteBody(FunctionBody body, Environment env)
+        {
+            if (body.WhereBindings != null)
+                foreach (var wb in body.WhereBindings)
+                {
+                    var c = wb;
+                    env.Set(wb.Name, new LazyValue(new LazyBinding(() => Eval(c.Value, env))));
+                }
+
+            var outputFields = new Dictionary<string, DslValue>();
+            DslValue? lastResult = null;
+
+            foreach (var stmt in body.Statements)
+            {
+                if (stmt is AssignmentStmt asgn)
+                {
+                    var value = Eval(asgn.Value, env);
+                    if (asgn.Targets.Count == 0)
+                        lastResult = value;
+                    else if (asgn.Targets.Count == 1)
+                    {
+                        env.Set(asgn.Targets[0], value);
+                        outputFields[asgn.Targets[0]] = value;
+                        lastResult = value;
+                    }
+                    else
+                    {
+                        if (value is ObjectValue ov)
+                        {
+                            foreach (var t in asgn.Targets)
+                            {
+                                if (ov.Fields.TryGetValue((object)t, out var fv))
+                                {
+                                    env.Set(t, fv);
+                                    outputFields[t] = fv;
+                                }
+                                else
+                                    throw new ExecutionException($"Multi-target: key '{t}' not found");
+                            }
+                            lastResult = value;
+                        }
+                        else
+                            throw new ExecutionException("Multi-target assignment requires object result");
+                    }
+                }
+            }
+
+            if (outputFields.Count > 0)
+            {
+                var r = new ObjectValue();
+                foreach (var (k, v) in outputFields) r.Fields[k] = v;
+                return r;
+            }
+            return lastResult ?? new ObjectValue();
+        }
+
+        private DslValue Eval(Expression expr, Environment env) => expr switch
+        {
+            IntLiteral il => new NumericValue(il.Value, "int"),
+            RealLiteral rl => new NumericValue(rl.Value, "real"),
+            StringLiteral sl => new StringValue(sl.Value),
+            BoolLiteral bl => new BoolValue(bl.Value),
+            IdentifierExpr id => ResolveVar(id.Name, env),
+            UnaryOpExpr uo => EvalUnary(uo, env),
+            BinaryOpExpr bo => EvalBinary(bo, env),
+            FunctionCallExpr fc => EvalFunctionCall(fc, env),
+            IndexExpr idx => EvalIndex(idx, env),
+            ObjectLiteral ol => EvalObjectLiteral(ol, env),
+            ConditionalExpr ce => EvalConditional(ce, env),
+            WhereExpr we => EvalWhere(we, env),
+            RangeExpr re => EvalRange(re, env),
+            _ => throw new ExecutionException($"Unknown expression: {expr.GetType().Name}")
+        };
+
+        private DslValue ResolveVar(string name, Environment env)
+        {
+            var v = env.Get(name);
+            if (v is LazyValue lv)
+            {
+                var r = lv.Binding.Value;
+                env.Set(name, r);
+                return r;
+            }
+            if (v != null) return v;
+            throw new ExecutionException($"Undefined variable: '{name}'");
+        }
+
+        private DslValue EvalUnary(UnaryOpExpr op, Environment env)
+        {
+            if (op.Operator == "?") return CheckKeyExistence(op.Operand, env);
+            var operand = Eval(op.Operand, env);
+            return op.Operator switch
+            {
+                "-" => Negate(operand),
+                "+" => UnaryPlus(operand),
+                "#" => Cardinality(operand),
+                _ => throw new ExecutionException($"Unknown unary operator: {op.Operator}")
+            };
+        }
+
+        private DslValue Negate(DslValue v)
+        {
+            if (v is NumericValue nv) return new NumericValue(-nv.Value, nv.NumericType);
+            if (v is BoolValue bv) return new NumericValue(bv.Value ? -1 : 0, "int");
+            if (v is ObjectValue ov)
+            {
+                var r = new ObjectValue();
+                foreach (var (k, val) in ov.Fields) r.Fields[k] = Negate(val);
+                return r;
+            }
+            throw new ExecutionException("Cannot negate non-numeric value");
+        }
+
+        private DslValue UnaryPlus(DslValue v)
+        {
+            if (v is NumericValue || v is BoolValue) return v;
+            if (v is ObjectValue ov)
+            {
+                var r = new ObjectValue();
+                foreach (var (k, val) in ov.Fields) r.Fields[k] = UnaryPlus(val);
+                return r;
+            }
+            return v;
+        }
+
+        private DslValue Cardinality(DslValue v)
+        {
+            if (v is ObjectValue ov) return new NumericValue(ov.Fields.Count, "int");
+            throw new ExecutionException("# only applies to objects");
+        }
+
+        private DslValue CheckKeyExistence(Expression operand, Environment env)
+        {
+            if (operand is IndexExpr idx)
+            {
+                var obj = Eval(idx.Object, env);
+                var index = Eval(idx.Index, env);
+                if (obj is ObjectValue ov)
+                    return new BoolValue(ov.Fields.ContainsKey(DslValueToKey(index)));
+                return new BoolValue(false);
+            }
+            try
+            {
+                var val = Eval(operand, env);
+                return new BoolValue(val is not ObjectValue ov2 || ov2.Fields.Count > 0);
+            }
+            catch
+            {
+                return new BoolValue(false);
+            }
+        }
+
+        private DslValue EvalBinary(BinaryOpExpr op, Environment env)
+        {
+            var left = Eval(op.Left, env);
+            var right = Eval(op.Right, env);
+
+            if (left is NumericValue ln && right is NumericValue rn)
+                return op.Operator switch
+                {
+                    "+" => new NumericValue(ln.Value + rn.Value, CombineType(ln, rn)),
+                    "-" => new NumericValue(ln.Value - rn.Value, CombineType(ln, rn)),
+                    "*" => new NumericValue(ln.Value * rn.Value, CombineType(ln, rn)),
+                    "/" => rn.Value == 0
+                        ? throw new ExecutionException("Division by zero")
+                        : new NumericValue(ln.Value / rn.Value, "real"),
+                    "<" => new BoolValue(ln.Value < rn.Value),
+                    ">" => new BoolValue(ln.Value > rn.Value),
+                    "<=" => new BoolValue(ln.Value <= rn.Value),
+                    ">=" => new BoolValue(ln.Value >= rn.Value),
+                    "=" => new BoolValue(ln.Value == rn.Value),
+                    _ => throw new ExecutionException($"Unknown operator: {op.Operator}")
+                };
+
+            if (left is BoolValue lb && right is BoolValue rb)
+                return op.Operator switch
+                {
+                    "=" => new BoolValue(lb.Value == rb.Value),
+                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to bools")
+                };
+
+            if (left is ObjectValue lo && right is ObjectValue ro)
+                return op.Operator switch
+                {
+                    "<" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) < 0),
+                    ">" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) > 0),
+                    "<=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) <= 0),
+                    ">=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) >= 0),
+                    "=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) == 0),
+                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to objects")
+                };
+
+            throw new ExecutionException(
+                $"Cannot apply '{op.Operator}' to {left.GetDslType().TypeName} and {right.GetDslType().TypeName}");
+        }
+
+        private static string CombineType(NumericValue a, NumericValue b)
+        {
+            if (a.NumericType == "real" || b.NumericType == "real") return "real";
+            if (a.NumericType == "int" || b.NumericType == "int") return "int";
+            return "num";
+        }
+
+        private DslValue EvalFunctionCall(FunctionCallExpr fc, Environment env)
+        {
+            switch (fc.Name)
+            {
+                case "map": return EvalMap(fc.Arguments, env);
+                case "filter": return EvalFilter(fc.Arguments, env);
+                case "keys": return EvalKeys(fc.Arguments, env);
+                case "first": return EvalFirst(fc.Arguments, env);
+                case "count": return EvalCount(fc.Arguments, env);
+                case "sum": return EvalSum(fc.Arguments, env);
+                case "merge": return EvalMerge(fc.Arguments, env);
+                case "concat": return EvalConcat(fc.Arguments, env);
+                case "replace": return EvalReplace(fc.Arguments, env);
+                case "arg_min": return EvalArgMin(fc.Arguments, env);
+            }
+
+            if (_functions.TryGetValue(fc.Name, out var func))
+            {
+                var plain = new List<DslValue>();
+                foreach (var a in fc.Arguments)
+                {
+                    if (a.Iterator != null)
+                        throw new ExecutionException(
+                            $"Iterator not supported in user function call '{fc.Name}'");
+                    plain.Add(Eval(a.Value, env));
+                }
+                var na = new Dictionary<string, DslValue>();
+                for (int i = 0; i < func.ImplParams.Count && i < plain.Count; i++)
+                    na[func.ImplParams[i]] = plain[i];
+                return CallFunction(func, na);
+            }
+            throw new ExecutionException($"Unknown function: '{fc.Name}'");
+        }
+
+        private DslValue EvalMap(List<CallArg> args, Environment env)
+        {
+            var it = args.FirstOrDefault(a => a.Iterator != null);
+            if (it == null) throw new ExecutionException("map() requires an iterator clause");
+            var coll = Eval(it.Iterator!.Collection, env);
+            if (coll is not ObjectValue co)
+                throw new ExecutionException("map() collection must be an object");
+            var vars = it.Iterator.Variables;
+            var ea = args.Where(a => a.Iterator == null).ToList();
+            if (ea.Count != 1)
+                throw new ExecutionException("map() expects one expression argument");
+            var body = ea[0].Value;
+            var result = new ObjectValue();
+            foreach (var (k, v) in co.Fields)
+            {
+                env.PushScope();
+                BindIter(env, vars, k, v);
+                result.Fields[k] = Eval(body, env);
+                env.PopScope();
+            }
+            return result;
+        }
+
+        private DslValue EvalFilter(List<CallArg> args, Environment env)
+        {
+            var it = args.FirstOrDefault(a => a.Iterator != null);
+            if (it == null) throw new ExecutionException("filter() requires an iterator clause");
+            var coll = Eval(it.Iterator!.Collection, env);
+            if (coll is not ObjectValue co)
+                throw new ExecutionException("filter() collection must be an object");
+            var vars = it.Iterator.Variables;
+            var ea = args.Where(a => a.Iterator == null).ToList();
+            if (ea.Count != 1)
+                throw new ExecutionException("filter() expects one predicate argument");
+            var pred = ea[0].Value;
+            var result = new ObjectValue();
+            foreach (var (k, v) in co.Fields)
+            {
+                env.PushScope();
+                BindIter(env, vars, k, v);
+                if (IsTruthy(Eval(pred, env))) result.Fields[k] = v;
+                env.PopScope();
+            }
+            return result;
+        }
+
+        private DslValue EvalKeys(List<CallArg> args, Environment env)
+        {
+            if (args.Count != 1) throw new ExecutionException("keys() expects one argument");
+            var c = Eval(args[0].Value, env);
+            if (c is not ObjectValue ov) throw new ExecutionException("keys() requires an object");
+            var r = new ObjectValue();
+            foreach (var k in ov.Fields.Keys) r.Fields[k] = KeyToDsl(k);
+            return r;
+        }
+
+        private DslValue EvalFirst(List<CallArg> args, Environment env)
+        {
+            if (args.Count != 1) throw new ExecutionException("first() expects one argument");
+            var c = Eval(args[0].Value, env);
+            if (c is not ObjectValue ov) throw new ExecutionException("first() requires an object");
+            if (ov.Fields.Count == 0) throw new ExecutionException("first() on empty object");
+            return ov.Fields.First().Value;
+        }
+
+        private DslValue EvalCount(List<CallArg> args, Environment env)
+        {
+            var it = args.FirstOrDefault(a => a.Iterator != null);
+            if (it != null)
+            {
+                var coll = Eval(it.Iterator!.Collection, env);
+                if (coll is not ObjectValue co)
+                    throw new ExecutionException("count() collection must be object");
+                var vars = it.Iterator.Variables;
+                var ea = args.Where(a => a.Iterator == null).ToList();
+                int cnt = 0;
+                foreach (var (k, v) in co.Fields)
+                {
+                    env.PushScope();
+                    BindIter(env, vars, k, v);
+                    if (ea.Count > 0) { if (IsTruthy(Eval(ea[0].Value, env))) cnt++; }
+                    else { if (IsTruthy(v)) cnt++; }
+                    env.PopScope();
+                }
+                return new NumericValue(cnt, "int");
+            }
+            if (args.Count != 1) throw new ExecutionException("count() expects one argument");
+            var c = Eval(args[0].Value, env);
+            if (c is ObjectValue ov)
+            {
+                int cnt2 = 0;
+                foreach (var v in ov.Fields.Values) if (IsTruthy(v)) cnt2++;
+                return new NumericValue(cnt2, "int");
+            }
+            throw new ExecutionException("count() requires an object");
+        }
+
+        private DslValue EvalSum(List<CallArg> args, Environment env)
+        {
+            var it = args.FirstOrDefault(a => a.Iterator != null);
+            if (it != null)
+            {
+                var coll = Eval(it.Iterator!.Collection, env);
+                if (coll is not ObjectValue co)
+                    throw new ExecutionException("sum() collection must be object");
+                var vars = it.Iterator.Variables;
+                var ea = args.Where(a => a.Iterator == null).ToList();
+                decimal tot = 0;
+                foreach (var (k, v) in co.Fields)
+                {
+                    env.PushScope();
+                    BindIter(env, vars, k, v);
+                    var val = ea.Count > 0 ? Eval(ea[0].Value, env) : v;
+                    if (val is NumericValue nv) tot += nv.Value;
+                    else throw new ExecutionException("sum() requires numeric values");
+                    env.PopScope();
+                }
+                return new NumericValue(tot, "real");
+            }
+            if (args.Count != 1) throw new ExecutionException("sum() expects one argument");
+            var c = Eval(args[0].Value, env);
+            if (c is not ObjectValue ov) throw new ExecutionException("sum() requires an object");
+            decimal t = 0;
+            foreach (var v in ov.Fields.Values)
+            {
+                if (v is NumericValue nv) t += nv.Value;
+                else throw new ExecutionException("sum() requires numeric values");
+            }
+            return new NumericValue(t, "real");
+        }
+
+        private DslValue EvalMerge(List<CallArg> args, Environment env) =>
+            EvalAggregation(args, env, MergeInto);
+
+        private void MergeInto(ObjectValue target, DslValue source)
+        {
+            if (source is not ObjectValue s)
+                throw new ExecutionException("merge() needs objects");
+            foreach (var (k, v) in s.Fields)
+            {
+                if (target.Fields.TryGetValue(k, out var ex))
+                {
+                    if (ex is ObjectValue eo && v is ObjectValue vo)
+                        MergeInto(eo, vo);
+                    else
+                        throw new ExecutionException($"merge() conflict on key: {k}");
+                }
+                else target.Fields[k] = v;
+            }
+        }
+
+        private DslValue EvalConcat(List<CallArg> args, Environment env) =>
+            EvalAggregation(args, env, ConcatInto);
+
+        private void ConcatInto(ObjectValue target, DslValue source)
+        {
+            if (source is not ObjectValue s)
+                throw new ExecutionException("concat() needs objects");
+            foreach (var (k, v) in s.Fields)
+            {
+                if (target.Fields.ContainsKey(k))
+                    throw new ExecutionException($"concat() key conflict: {k}");
+                target.Fields[k] = v;
+            }
+        }
+
+        private DslValue EvalReplace(List<CallArg> args, Environment env) =>
+            EvalAggregation(args, env, ReplaceInto);
+
+        private void ReplaceInto(ObjectValue target, DslValue source)
+        {
+            if (source is not ObjectValue s)
+                throw new ExecutionException("replace() needs objects");
+            foreach (var (k, v) in s.Fields) target.Fields[k] = v;
+        }
+
+        private DslValue EvalAggregation(List<CallArg> args, Environment env,
+            Action<ObjectValue, DslValue> combine)
+        {
+            var it = args.FirstOrDefault(a => a.Iterator != null);
+            if (it != null)
+            {
+                var coll = Eval(it.Iterator!.Collection, env);
+                if (coll is not ObjectValue co)
+                    throw new ExecutionException("Aggregation collection must be object");
+                var vars = it.Iterator.Variables;
+                var ea = args.Where(a => a.Iterator == null).ToList();
+                var result = new ObjectValue();
+                foreach (var (k, v) in co.Fields)
+                {
+                    env.PushScope();
+                    BindIter(env, vars, k, v);
+                    combine(result, ea.Count > 0 ? Eval(ea[0].Value, env) : v);
+                    env.PopScope();
+                }
+                return result;
+            }
+            var r = new ObjectValue();
+            foreach (var a in args) combine(r, Eval(a.Value, env));
+            return r;
+        }
+
+        private DslValue EvalArgMin(List<CallArg> args, Environment env)
+        {
+            if (args.Count != 1) throw new ExecutionException("arg_min() expects one argument");
+            var c = Eval(args[0].Value, env);
+            if (c is not ObjectValue ov) throw new ExecutionException("arg_min() requires an object");
+            if (ov.Fields.Count == 0) return new ObjectValue();
+            DslValue? min = null;
+            foreach (var v in ov.Fields.Values)
+                if (min == null || ObjectKeyComparer.CompareValues(v, min) < 0)
+                    min = v;
+            var r = new ObjectValue();
+            foreach (var (k, v) in ov.Fields)
+                if (ObjectKeyComparer.CompareValues(v, min!) == 0)
+                    r.Fields[k] = KeyToDsl(k);
+            return r;
+        }
+
+        private DslValue EvalIndex(IndexExpr idx, Environment env)
+        {
+            var obj = Eval(idx.Object, env);
+            var index = Eval(idx.Index, env);
+            if (obj is not ObjectValue ov)
+                throw new ExecutionException(
+                    $"Cannot index non-object (got {obj.GetDslType().TypeName})");
+            var key = DslValueToKey(index);
+            if (ov.Fields.TryGetValue(key, out var val)) return val;
+            throw new ExecutionException($"Key '{key}' not found in object");
+        }
+
+        private DslValue EvalObjectLiteral(ObjectLiteral ol, Environment env)
+        {
+            var r = new ObjectValue();
+            foreach (var (ke, ve) in ol.Fields)
+            {
+                var k = DslValueToKey(Eval(ke, env));
+                r.Fields[k] = Eval(ve, env);
+            }
+            return r;
+        }
+
+        private DslValue EvalConditional(ConditionalExpr ce, Environment env) =>
+            IsTruthy(Eval(ce.Condition, env))
+                ? Eval(ce.ThenExpr, env)
+                : Eval(ce.ElseExpr, env);
+
+        private DslValue EvalWhere(WhereExpr we, Environment env)
+        {
+            env.PushScope();
+            foreach (var b in we.Bindings)
+            {
+                var c = b;
+                env.Set(b.Name,
+                    new LazyValue(new LazyBinding(() => Eval(c.Value, env))));
+            }
+            var r = Eval(we.MainExpr, env);
+            env.PopScope();
+            return r;
+        }
+
+        private DslValue EvalRange(RangeExpr re, Environment env)
+        {
+            var s = Eval(re.Start, env);
+            var e = Eval(re.End, env);
+            if (s is not NumericValue sn || e is not NumericValue en)
+                throw new ExecutionException("Range requires numeric bounds");
+            var r = new ObjectValue();
+            for (long i = (long)sn.Value; i <= (long)en.Value; i++)
+                r.Fields[i] = new NumericValue(i, "int");
+            return r;
+        }
+
+        private void BindIter(Environment env, List<string> vars,
+            object key, DslValue value)
+        {
+            if (vars.Count == 1) env.Set(vars[0], value);
+            else if (vars.Count >= 2)
+            {
+                env.Set(vars[0], KeyToDsl(key));
+                env.Set(vars[1], value);
+            }
+        }
+
+        private static object DslValueToKey(DslValue v) => v switch
+        {
+            NumericValue nv => nv.Value % 1 == 0
+                ? (object)(long)nv.Value : (object)nv.Value,
+            StringValue sv => sv.Value,
+            BoolValue bv => bv.Value ? 1L : 0L,
+            ObjectValue ov => ov,
+            _ => throw new ExecutionException(
+                $"Cannot use as key: {v.GetDslType().TypeName}")
+        };
+
+        private static DslValue KeyToDsl(object k) => k switch
+        {
+            long l => new NumericValue(l, "int"),
+            int i => new NumericValue(i, "int"),
+            decimal d => new NumericValue(d, "real"),
+            string s => new StringValue(s),
+            ObjectValue ov => ov,
+            _ => throw new ExecutionException(
+                $"Unexpected key type: {k.GetType().Name}")
+        };
+
+        private static bool IsTruthy(DslValue v) => v switch
+        {
+            BoolValue bv => bv.Value,
+            NumericValue nv => nv.Value != 0,
+            ObjectValue ov => ov.Fields.Count > 0,
+            StringValue sv => !string.IsNullOrEmpty(sv.Value),
+            _ => true
+        };
     }
 }
