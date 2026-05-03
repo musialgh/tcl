@@ -265,7 +265,7 @@ compute_places(scores) =
         { "pmin": pmin, "pmax": pmax, "pval" : pval }
         where 
             // please note: element-wise comparison of objects, in key order, is a language feature
-            pmin = 1       + count(other_score in scores, other_score < score) + 1,
+            pmin = 1       + count(other_score in scores, other_score < score),
             pmax = #scores - count(other_score in scores, other_score > score),
             pval = (pmin + pmax) / 2
     );
@@ -280,7 +280,7 @@ count_and_sum(place, marks) =
     count =  #relevant,   
     sum   =  sum(relevant)
 where
-    relevant = filter(mark in marks, mark <= place),
+    relevant = filter(mark in marks, mark <= place);
 
 
 
@@ -290,6 +290,4 @@ count_and_sum_maj(count_and_sum); // re-use signature
 count_and_sum_maj(place, marks) =
     data if data["count"] > (#marks / 2) | { "count" : 0, "sum" : 0 }
 where
-    data = count_and_sum(place, marks)
-
-
+    data = count_and_sum(place, marks);

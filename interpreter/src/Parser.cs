@@ -24,11 +24,13 @@ namespace TclInterpreter.Parsing
     {
         private readonly List<Token> _tokens;
         private int _pos;
+        private int _parenDepth; // tracks nesting inside ( ) for disambiguation
 
         public Parser(List<Token> tokens)
         {
             _tokens = tokens;
             _pos = 0;
+            _parenDepth = 0;
         }
 
         // ================================================================
@@ -779,7 +781,9 @@ namespace TclInterpreter.Parsing
             if (Check(TokenType.LeftParen))
             {
                 Advance();
+                _parenDepth++;
                 var expr = ParseExpression();
+                _parenDepth--;
                 Expect(TokenType.RightParen, "Expected ')'");
                 return expr;
             }
@@ -793,7 +797,9 @@ namespace TclInterpreter.Parsing
                 if (Check(TokenType.LeftParen))
                 {
                     Advance(); // '('
+                    _parenDepth++;
                     var args = ParseCallArgs();
+                    _parenDepth--;
                     Expect(TokenType.RightParen, "Expected ')'");
                     return new FunctionCallExpr(name, args);
                 }
@@ -850,8 +856,9 @@ namespace TclInterpreter.Parsing
 
             Expression result = new ObjectLiteral(fields);
 
-            // Check for inline 'where'
-            if (Check(TokenType.KwWhere))
+            // Check for inline 'where' — only when inside parentheses (e.g. function call args)
+            // At top level of a function body, 'where' belongs to the body, not the object.
+            if (_parenDepth > 0 && Check(TokenType.KwWhere))
             {
                 Advance();
                 var bindings = ParseInlineWhereBindings();
