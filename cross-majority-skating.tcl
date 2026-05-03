@@ -36,7 +36,7 @@ evaluate_dance_final(marks) =
     report = map(
         my_marks in marks, 
         concat(
-            place in 1..num_starts-1,
+            place in 1..num_starts,
             { place : count_and_sum(place, my_marks["jury"]) }
         )
     ),
@@ -45,7 +45,7 @@ where
     score = map(
         my_no, my_marks in marks, 
         concat(
-            place in 1..num_starts-1,
+            place in 1..num_starts,
             // ordering by number of majority votes, then sum (core of majority judging)
             // count is negated in score sequence, since higher is better there (and 0es will not be affected)
             { 2*place-1 : -report[my_no][place]["count"], 2*place : +report[my_no][place]["sum"] }
@@ -120,7 +120,7 @@ evaluate_round_final_skating(marks, places) =
     places = compute_places(scores_up)               // final scoring delivers final placing
 where
     // number of places in list: all except last possible
-    num = count(first(places)) - 1;
+    num = count(first(places));
     // invoke majority system as a basis
     majority_report, majority_places = evaluate_round_final(marks, places),
     // initialize score sequences with single place value obtained from majority evaluation
@@ -140,21 +140,21 @@ where
 
 
 /// Refine assignment of places starting with <for place> according to skating rules, whenever neccessary.
-/// The implementation of the function body will just apply R10 to <for_place>,
+/// The implementation of the function body will just apply R10 for <for_place>,
 /// but then recursively invoke either R10 on the next place, or R11 on the same.
 skating_refine_r10:
     marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
     places      : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } },
     /// score list as far as already constructed 
-    scores      : { start_no+ : {object } },
+    scores      : { start_no+ : { 0 : real, place* : { "R10"? : nat, "R11"? : nat } } },
     /// target place to be resolved next (default value is for start of recursion)
     for_place   : nat = 1
 ->
     scores      : { start_no+ : object };
 
 skating_refine_r10(marks, places, scores, for_place) =
-    scores                                                       if for_place >= #field |
-    skating_refine_r10(marks, places,     scores, for_place + 1) if #candidates < 2  |
+    scores                                                       if for_place > #field |
+    skating_refine_r10(marks, places,     scores, for_place + 1) if #candidates < 2    |
     skating_refine_r11(marks, places, r10_scores, for_place)
 where 
     field           = keys(first(places)),
@@ -176,12 +176,11 @@ where
     // recursively merge new column with existing score lists
     // -- then, all starts competing for <for_place> have been refined by way of the new column,
     //    while all others are correctly discriminated via the very first column (place-sum) anyway
-    r10_scores = merge(scores, r10_coulumn);
+    r10_scores = merge(scores, r10_column);
 
         
-
 /// Refine assignment of places starting with <for place> according to skating rules, whenever neccessary.
-/// The implementation of the function body will just apply R11 to <for_place>,
+/// The implementation of the function body will just apply R11 for <for_place>,
 /// but then recursively invoke R10 on the next place
 skating_refine_r11:
     marks       : { dance+ : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } }, 
@@ -191,17 +190,18 @@ skating_refine_r11:
     /// target place to be resolved next
     for_place   : nat
 ->
-    scores      : { start_no+ : object },
+    scores      : { start_no+ : object };
 
 skating_refine_r11(marks, places, scores, for_place) =
-    scores                                                       if for_place >= #field |
-    skating_refine_r10(marks, places,     scores, for_place + 1) if num_candidates < 2  |
-    skating_refine_r10(marks, places, r11_scores, for_place + 1)
-where
+    scores                                                       if for_place > #field |
+    skating_refine_r11(marks, places,     scores, for_place + 1) if #candidates < 2    |
+    skating_refine_r11(marks, places, r11_scores, for_place)
+where 
     field           = keys(first(places)),
     r11_places      = compute_places(scores),
-    num_candidates  = count(range in r11_places, range["pmin"] = for_place),
-    // collect marks for all dances, per start, under a "merged key" for adjudicators and dances
+    candidates      = keys(filter(range in r11_places, range["pmin"] = for_place)),
+    // please note that everything below is only computed if <r11_scores> is required above for recursion
+    // flatten marks for all dances, per start, under a "merged key" for adjudicators and dances
     r11_marks       = merge(
         dkey, dance in marks,
         map(
@@ -212,14 +212,30 @@ where
             )
         )    
     ),
-    // set all R11 columns -- only evaluated if r11_scores is needed above
-    r11_scores      = map(
-        start, my_marks in r11_marks,
-        
-    where 
-        c_and_s = count_and_sum(place, my_marks)
-                
-    );
+    // compute counts and sums for candidatestarts as for single dances, but only from <for_dance> onwards
+    r11_rows        = map(
+        start in candidates,
+        map(
+            place in for_place..#field, // map() works since range sets key = value pairs
+            count_and_sum(place, r11_marks)    
+        )    
+    ),
+    // negate counts (higher is better) and use safely-ordered keys -- not relying on "count" < "sum" ;-)
+    r11_values      = map(start in r11_rows, map(place in start, { 1 : -place["count"], 2 : +place["sum"] })),
+    // determine best value of competing starts
+    r11_chosen      = arg_min(r11_values), // returns key -> key mapping(s) for all occurrences of the minimum
+    // create a new r11 coulumn using resulting places for all candidates:
+    // - resulting place is <for_place> for each occurrence of the optimum value
+    // - resulting place is next one assignable for all others (discrimination within this group later via R11)
+    r11_column      = map(
+        start in candidates, 
+        { for_place : { "R11" : for_place               } } if ?r11_chosen[start] | 
+        { for_place : { "R11" : for_place + #r11_chosen } }
+    ),
+    // recursively merge new column with existing score lists
+    // -- then, all starts competing for <for_place> have been refined by way of the new column,
+    //    while all others are correctly discriminated via the very first column (place-sum) anyway
+    r11_scores = merge(scores, r11_column);
 
 
 
