@@ -106,18 +106,18 @@ tcl compute_places --input-file scores.json
 - ✅ Parser: Recursive descent parser with AST construction
 - ✅ Type system: Hierarchy and narrowing rules
 - ✅ Executor scaffolding: Basic execution context and framework
+- ✅ Built-in functions: map, filter, merge, concat, replace, etc.
+- ✅ Function call evaluation
+- ✅ Object comparisons (depth-first traversal)
+- ✅ Iterator clauses ("in" syntax)
+- ✅ Error messages with source locations
 
 ### In Progress
-- 🔄 Built-in functions: map, filter, merge, concat, replace, etc.
-- 🔄 Function call evaluation
-- 🔄 Object comparisons (depth-first traversal)
-- 🔄 Iterator clauses ("in" syntax)
+- 🔄 Template validation
+- 🔄 Type checking during execution (optional feature)
+- 🔄 Comprehensive test suite
 
 ### Not Started
-- ⚠️ Template validation
-- ⚠️ Type checking during execution (optional feature)
-- ⚠️ Error messages with source locations
-- ⚠️ Comprehensive test suite
 - ⚠️ Performance optimizations
 
 ## Testing
