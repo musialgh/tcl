@@ -1,0 +1,38 @@
+I want to have an interpretor for the new tcl language that I am specifying only through the two open files. 
+* the interpreter shall be implemented in c# sharp and callable via the command line.
+* the interpreter shall be invoked with a single function name and all input parameters specifiend as a JSON object.
+* the interpreter shall then output the function return, also as a JSON object. 
+** please note: we assume the output values use only numbers and strings as keys, not objects, as you can see in the { jkey, dkey } case. If any output contains an object as a key, the interpreter shall output an error.
+
+Please create a plan for the implementation first.
+
+Some clarifications:
+* yes, unary + or - shall definitely be applied recursively
+* first() on an empty object shall generate a runtime error
+* Some rule for aggregation calls:
+** aggregation functions like merge, concat, sum, count, replace (and maybe others) shall
+*** work on the keys/indices range whenever the first argument has an "in" clause, or is a key range
+*** work on all supplied arguments otherwise
+** merge() shall recursively combine key-value pairs within coresponding (i.e. same-key) (sub-)objects.
+   it is a run-time error to have competing keys (even with identical values) 
+** concat() works like merge, but requires and checks that for any sub-object, all keys from any later argument are greater than all keys from any earlier argument, to imply an "appending" functionality
+** replace() is most general. It works like merge(), and allows conflicting keys by overwriting values from earlier arguments by thos from later ones.
+* generally, I want something like a map[key -> value] data type for the implementation of objects:
+** all numbers as keys sort lower than any strings (including things like "100")
+** the empty object {} as a key sorts lowest
+** the notation order of object elements is always irrelevant (i.e. there is no implicit numerical index in addition to the keys used)
+* when comparing objects via <, =, >, the comparision is done
+** on a flattened value sequence obtained through depth-first search in the order of increasing keys  
+** the keys are not otherwise used, i.e. only values are compared, which may have different keys.
+* in the signatures, the template mechanism only allows to *narrow* the permitted inputs and outputs:
+** types are narrowing subsets in the following orders:
+*** any > num > real
+*** any > num > int > nat > bool
+*** any > object
+* the interpreter shall be able to verify the structure of function inputs and outputs, but only as an option 
+** (if disabled, violations may lead to individual runtime errors in the code, of course)
+* in the start of a body implementation (before "where"), only the return value tags may be used as assignment targets
+** in the part below "where", all missing bindings must be resolved (lazily!)
+** there, new symbols may be bound, to be used later in the where block  
+ 
+
