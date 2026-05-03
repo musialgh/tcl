@@ -10,7 +10,7 @@ template_evaluate_element:
     params? : { param+ : num }
 ->
     /// optional data for result reports, optionally structured in groups
-    report? : { start_no+ : { colum-tree+ : any } },            
+    report? : { start_no+ : object },            
     /// place range pmin..pmax and representative value pval;
     /// results will be ordered according to the latter
     places  : { start_no+ : { "pmin" : num, "pmax" : num, "pval" : num } };
@@ -27,7 +27,7 @@ template_evaluate_round:
     params? : { param+ : num }
 ->
     /// optional data for result reports, optionally structured in groups
-    report? : { start_no+ : { colum-tree+ : any } },            
+    report? : { start_no+ : object },            
     /// place range pmin..pmax and representative value pval;
     /// results will be ordered according to the latter
     places  : { start_no+ : { "pmin" : num, "pmax" : num, "pval" : num } };
