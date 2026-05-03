@@ -69,7 +69,7 @@ evaluate_round_elimination(template_evaluate_round):
 evaluate_round_elimination(marks, places) = 
     report = map(
         my_no in field,
-        { "count" : sum(dance in marks, count(dance[my_no]["jury"]) }
+        { "count" : sum(dance in marks, count(dance[my_no]["jury"])) }
     ),
     // more crosses is better => must negate report values
     //  -- basic scalar arithmetics, such as prefix minus, are defined element-wise as a language feature
@@ -116,6 +116,8 @@ evaluate_round_final_skating(template_evaluate_round):
                                   "R10"?       : { place+ : { "count" : int, "sum" : real } },
                                   "R11"?       : { place+ : { "count" : int, "sum" : int  } }
                   } },
+    /// place ranges use natural numbers, place value may be fractional (average)
+    places  : { start_no+ : {  "pmin" : int, "pmax" : int, "pval" : real } };
 
 evaluate_round_final_skating(marks, places) = 
     report = report_up,
