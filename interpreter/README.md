@@ -122,11 +122,45 @@ tcl compute_places --input-file scores.json
 
 ## Testing
 
-Run tests with:
+Integration tests live in `interpreter/tests/` as paired JSON files and are driven
+by a shell script at the repository root:
 
 ```bash
-dotnet test
+./run_tests.sh
 ```
+
+The script builds the interpreter once, then runs each registered test case by
+invoking the CLI with the input JSON, comparing `stdout` against the expected
+output JSON via `diff -u`. On failure the unified diff is printed for diagnosis.
+The script exits with code 0 if all tests pass, 1 otherwise.
+
+### Adding a new test case
+
+1. Create the input and expected-output files in `interpreter/tests/`:
+
+   ```
+   interpreter/tests/test_<category>_<NNN>_in.json
+   interpreter/tests/test_<category>_<NNN>_out.json
+   ```
+
+   `<category>` identifies the function under test (e.g. `elimination`, `final`).
+   `<NNN>` is a zero-padded sequence number (e.g. `001`, `002`).
+
+2. Append one entry to the `TESTS` array in `run_tests.sh`:
+
+   ```bash
+   TESTS=(
+     # ... existing entries ...
+     "<function_name>|test_<category>_<NNN>_in.json|test_<category>_<NNN>_out.json"
+   )
+   ```
+
+   The three pipe-separated fields are:
+   - **function name** — the DSL function to call (e.g. `evaluate_dance_elimination`)
+   - **input file** — filename inside `interpreter/tests/`
+   - **expected output file** — filename inside `interpreter/tests/`
+
+3. Run `./run_tests.sh` and verify the new case shows `OK`.
 
 ## Development Notes
 
