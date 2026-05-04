@@ -24,8 +24,8 @@ TEST_DIR="$INTERPRETER_DIR/tests"
 # Format:  "function_name|input_file|expected_output_file"
 
 TESTS=(
-  "evaluate_dance_elimination|test_elimination_001_in.json|test_elimination_001_out.json"
-  "evaluate_dance_final|test_final_001_in.json|test_final_001_out.json"
+  "evaluate_dance_elimination|test_elimination_dance_001_in.json|test_elimination_dance_001_out.json"
+  "evaluate_dance_final|test_final_dance_001_in.json|test_final_dance_001_out.json"
 )
 
 # ---------- build once --------------------------------------------------------

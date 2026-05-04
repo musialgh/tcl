@@ -9,9 +9,8 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- JSON parsing -->
+  <!-- <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="8.0.0" />
-  </ItemGroup>
+  </ItemGroup> -->
 
 </Project>
