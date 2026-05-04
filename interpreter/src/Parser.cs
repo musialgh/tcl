@@ -34,6 +34,21 @@ namespace TclInterpreter.Parsing
         }
 
         // ================================================================
+        //  Location tracking helper
+        // ================================================================
+
+        private T WithLocation<T>(T node) where T : AstNode
+        {
+            if (_pos > 0)
+            {
+                var prevToken = _tokens[_pos - 1];
+                node.Line = prevToken.Line;
+                node.Column = prevToken.Column;
+            }
+            return node;
+        }
+
+        // ================================================================
         //  Public entry point
         // ================================================================
 

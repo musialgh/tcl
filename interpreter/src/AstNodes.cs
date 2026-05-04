@@ -7,7 +7,11 @@ namespace TclInterpreter.Parsing
     //  Base
     // ========================================================================
 
-    public abstract record AstNode;
+    public abstract record AstNode
+    {
+        public int Line { get; set; }
+        public int Column { get; set; }
+    };
 
     // ========================================================================
     //  Top-level program

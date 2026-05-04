@@ -8,7 +8,14 @@ namespace TclInterpreter.Execution
 {
     public class ExecutionException : Exception
     {
-        public ExecutionException(string message) : base(message) { }
+        public int Line { get; }
+        public int Column { get; }
+        public ExecutionException(string message, int line = 0, int col = 0)
+            : base(line > 0 ? $"{message} at line {line}, col {col}" : message)
+        {
+            Line = line;
+            Column = col;
+        }
     }
 
     public class Environment
@@ -127,13 +134,6 @@ namespace TclInterpreter.Execution
                         if (dv != null) env.Set(p, dv);
                     }
                 }
-                // Provide num_starts convenience variable
-                if (namedArgs.TryGetValue("marks", out var mv) && mv is ObjectValue mo)
-                {
-                    var fe = mo.Fields.Values.FirstOrDefault();
-                    if (fe is ObjectValue fo)
-                        env.Set("num_starts", new NumericValue(fo.Fields.Count, "int"));
-                }
                 return ExecuteBody(func.Body, env);
             }
             finally { _recursionDepth--; }
@@ -150,6 +150,11 @@ namespace TclInterpreter.Execution
                     if (p.Name == paramName && p.DefaultValue != null)
                         return Eval(p.DefaultValue, new Environment());
             return null;
+        }
+
+        private ExecutionException ThrowAtExpr(string message, Expression expr)
+        {
+            return new ExecutionException(message, expr.Line, expr.Column);
         }
 
         private DslValue ExecuteBody(FunctionBody body, Environment env)
@@ -208,23 +213,34 @@ namespace TclInterpreter.Execution
             return lastResult ?? new ObjectValue();
         }
 
-        private DslValue Eval(Expression expr, Environment env) => expr switch
+        private DslValue Eval(Expression expr, Environment env)
         {
-            IntLiteral il => new NumericValue(il.Value, "int"),
-            RealLiteral rl => new NumericValue(rl.Value, "real"),
-            StringLiteral sl => new StringValue(sl.Value),
-            BoolLiteral bl => new BoolValue(bl.Value),
-            IdentifierExpr id => ResolveVar(id.Name, env),
-            UnaryOpExpr uo => EvalUnary(uo, env),
-            BinaryOpExpr bo => EvalBinary(bo, env),
-            FunctionCallExpr fc => EvalFunctionCall(fc, env),
-            IndexExpr idx => EvalIndex(idx, env),
-            ObjectLiteral ol => EvalObjectLiteral(ol, env),
-            ConditionalExpr ce => EvalConditional(ce, env),
-            WhereExpr we => EvalWhere(we, env),
-            RangeExpr re => EvalRange(re, env),
-            _ => throw new ExecutionException($"Unknown expression: {expr.GetType().Name}")
-        };
+            try
+            {
+                return expr switch
+                {
+                    IntLiteral il => new NumericValue(il.Value, "int"),
+                    RealLiteral rl => new NumericValue(rl.Value, "real"),
+                    StringLiteral sl => new StringValue(sl.Value),
+                    BoolLiteral bl => new BoolValue(bl.Value),
+                    IdentifierExpr id => ResolveVar(id.Name, env),
+                    UnaryOpExpr uo => EvalUnary(uo, env),
+                    BinaryOpExpr bo => EvalBinary(bo, env),
+                    FunctionCallExpr fc => EvalFunctionCall(fc, env),
+                    IndexExpr idx => EvalIndex(idx, env),
+                    ObjectLiteral ol => EvalObjectLiteral(ol, env),
+                    ConditionalExpr ce => EvalConditional(ce, env),
+                    WhereExpr we => EvalWhere(we, env),
+                    RangeExpr re => EvalRange(re, env),
+                    _ => throw new ExecutionException($"Unknown expression: {expr.GetType().Name}")
+                };
+            }
+            catch (ExecutionException ex) when (ex.Line == 0)
+            {
+                // Re-throw with location info if not already present
+                throw new ExecutionException(ex.Message.Replace(" at line 0, col 0", ""), expr.Line, expr.Column);
+            }
+        }
 
         private DslValue ResolveVar(string name, Environment env)
         {

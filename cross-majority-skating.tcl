@@ -36,16 +36,17 @@ evaluate_dance_final(marks) =
     report = map(
         my_marks in marks, 
         concat(
-            place in 1..num_starts,
+            place in 1..#field,
             { place : count_and_sum_maj(place, my_marks["jury"]) }
         )
     ),
     places = compute_places(score)
 where
+    field = keys(first(marks)),
     score = map(
         my_no, my_marks in marks, 
         concat(
-            place in 1..num_starts,
+            place in 1..#field,
             // ordering by number of majority votes, then sum (core of majority judging)
             // count is negated in score sequence, since higher is better there (and 0es will not be affected)
             { 2*place-1 : -report[my_no][place]["count"], 2*place : +report[my_no][place]["sum"] }
