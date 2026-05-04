@@ -42,7 +42,7 @@ evaluate_dance_final(marks) =
     ),
     places = compute_places(score)
 where
-    field = keys(first(marks)),
+    field = keys(marks),
     score = map(
         my_no, my_marks in marks, 
         concat(
