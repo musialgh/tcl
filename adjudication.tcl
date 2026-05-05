@@ -35,6 +35,6 @@ template_evaluate_round:
 
 // Import all adjudication libraries ===================================================================================
 
-import cross-majority-skating as cms;
+// import cross-majority-skating as cms;
 // import equality_classification as eq_cls;
 // ...

@@ -236,18 +236,27 @@ namespace TclInterpreter.Execution
                     {
                         if (value is ObjectValue ov)
                         {
-                            foreach (var t in asgn.Targets)
+                            // Match targets to return variables by signature order, not by name
+                            if (returnVarSet.Count == asgn.Targets.Count)
                             {
-                                if (ov.Fields.TryGetValue((object)t, out var fv))
+                                for (int i = 0; i < asgn.Targets.Count; i++)
                                 {
-                                    env.Set(t, fv);
-                                    outputFields[t] = fv;
-                                    assignedReturnVars.Add(t);
+                                    var targetName = asgn.Targets[i];
+                                    var returnVarName = returnVarNames[i];
+                                    
+                                    if (ov.Fields.TryGetValue((object)returnVarName, out var fv))
+                                    {
+                                        env.Set(targetName, fv);
+                                        outputFields[targetName] = fv;
+                                        assignedReturnVars.Add(targetName);
+                                    }
+                                    else
+                                        throw new ExecutionException($"Return variable '{returnVarName}' not found in multi-return result");
                                 }
-                                else
-                                    throw new ExecutionException($"Multi-target: key '{t}' not found");
+                                lastResult = value;
                             }
-                            lastResult = value;
+                            else
+                                throw new ExecutionException($"Multi-target assignment count mismatch: expected {asgn.Targets.Count} returns, but function signature declares {returnVarSet.Count}");
                         }
                         else
                             throw new ExecutionException("Multi-target assignment requires object result");
