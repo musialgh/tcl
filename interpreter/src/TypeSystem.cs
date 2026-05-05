@@ -272,11 +272,7 @@ namespace TclInterpreter.Typing
                 if (!ha) return -1;  // fewer keys = smaller
                 if (!hb) return 1;
 
-                // Compare keys first (to establish traversal order alignment)
-                int kc = Instance.Compare(ea.Current.Key, eb.Current.Key);
-                if (kc != 0) return kc;
-
-                // Compare values
+                // Compare value (order is considered per sub-object, but not the keys)
                 int vc = CompareValues(ea.Current.Value, eb.Current.Value);
                 if (vc != 0) return vc;
             }
