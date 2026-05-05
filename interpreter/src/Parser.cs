@@ -735,7 +735,7 @@ namespace TclInterpreter.Parsing
                 Advance(); // '['
                 var index = ParseExpression();
                 Expect(TokenType.RightBracket, "Expected ']'");
-                expr = new IndexExpr(expr, index);
+                expr = WithLocation(new IndexExpr(expr, index));
             }
             
             return expr;
