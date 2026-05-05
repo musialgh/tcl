@@ -6,6 +6,7 @@ using TclInterpreter.Parsing;
 using TclInterpreter.Execution;
 using TclInterpreter.Json;
 
+
 namespace TclInterpreter
 {
     class Program
@@ -52,7 +53,10 @@ namespace TclInterpreter
 
                 // If no script paths specified, auto-detect
                 if (scriptPaths.Count == 0)
+                {
+                    Console.Error.WriteLine("Info: Autodetecting script files...");
                     scriptPaths = FindScriptFiles();
+                }
 
                 if (scriptPaths.Count == 0)
                 {
@@ -137,23 +141,27 @@ namespace TclInterpreter
         /// </summary>
         static List<string> FindScriptFiles()
         {
+            var baseDir = Directory.GetCurrentDirectory();
+
             var candidates = new[]
             {
-                // From inside interpreter/ directory
-                new[] { "../adjudication.tcl", "../cross-majority-skating.tcl" },
-                // From project root
-                new[] { "adjudication.tcl", "cross-majority-skating.tcl" },
-                // Single combined file
-                new[] { "functions.tcl" },
-                new[] { "../functions.tcl" },
+                // simple root script convention (TODO import...)
+                new[] { baseDir, "main.tcl" },
+                // anything in cwd (you can use symlinks...)
+                new[] { baseDir, "*.tcl" },
+                // common relative path
+                new[] { Path.Combine(baseDir, "tcl"), "*.tcl" },
             };
 
-            foreach (var set in candidates)
+            foreach (var option in candidates)
             {
-                if (set.All(File.Exists))
-                    return set.Select(Path.GetFullPath).ToList();
-            }
+                var files = Directory.EnumerateFiles(
+                                option[0], option[1], SearchOption.TopDirectoryOnly
+                            ).ToList();
 
+                if (files.Count > 0) return files;
+            }
+        
             return new List<string>();
         }
     }
