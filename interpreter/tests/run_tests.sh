@@ -16,7 +16,7 @@ set -euo pipefail
 # ---------- locate directories ------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
+REPO_ROOT="$SCRIPT_DIR/../.."
 INTERPRETER_DIR="$REPO_ROOT/interpreter"
 TEST_DIR="$INTERPRETER_DIR/tests"
 
@@ -65,7 +65,7 @@ for entry in "${TESTS[@]}"; do
     --input-file "$input_path" \
     --script "$REPO_ROOT/adjudication.tcl" \
     --script "$REPO_ROOT/cross-majority-skating.tcl" \
-    2>/dev/null) || {
+    ) || {
       echo "FAIL (non-zero exit)"
       FAIL=$((FAIL + 1))
       ERRORS+="  FAIL: $func ($infile) — interpreter returned non-zero exit code\n"

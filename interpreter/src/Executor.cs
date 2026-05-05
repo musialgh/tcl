@@ -45,6 +45,23 @@ namespace TclInterpreter.Execution
             }
             return null;
         }
+
+        /// <summary>Get all variables visible in the current environment (from all scopes).</summary>
+        public Dictionary<string, DslValue> GetAllVisible()
+        {
+            var result = new Dictionary<string, DslValue>();
+            // Iterate scopes from innermost to outermost
+            var scopeList = _scopes.ToList();
+            for (int i = scopeList.Count - 1; i >= 0; i--)
+            {
+                foreach (var (key, value) in scopeList[i])
+                {
+                    if (!result.ContainsKey(key))
+                        result[key] = value;
+                }
+            }
+            return result;
+        }
     }
 
     public class LazyBinding
@@ -134,7 +151,13 @@ namespace TclInterpreter.Execution
                         if (dv != null) env.Set(p, dv);
                     }
                 }
-                return ExecuteBody(func.Body, env);
+                // Extract return variable names from signature
+                // First try signature attached to function; if not, look up in signatures dict
+                var sig = func.Signature;
+                if (sig == null && _signatures.TryGetValue(func.Name, out var lookupSig))
+                    sig = lookupSig;
+                var returnVarNames = sig?.Outputs?.Select(o => o.Name).ToList() ?? new List<string>();
+                return ExecuteBody(func.Body, env, returnVarNames);
             }
             finally { _recursionDepth--; }
         }
@@ -157,18 +180,43 @@ namespace TclInterpreter.Execution
             return new ExecutionException(message, expr.Line, expr.Column);
         }
 
-        private DslValue ExecuteBody(FunctionBody body, Environment env)
+        private DslValue ExecuteBody(FunctionBody body, Environment env, List<string> returnVarNames)
         {
+            // Create a restricted environment for where clause evaluation
+            // It can only see: function parameters (not return variables or body assignments)
+            var whereEnv = new Environment();
+            
+            // Copy parameters into whereEnv
+            var allVars = env.GetAllVisible();
+            foreach (var (name, value) in allVars)
+            {
+                whereEnv.Set(name, value);
+            }
+
+            // Set up where clause bindings in the restricted environment
+            // These can reference parameters and other where bindings, but NOT return variables
             if (body.WhereBindings != null)
                 foreach (var wb in body.WhereBindings)
                 {
-                    var c = wb;
-                    env.Set(wb.Name, new LazyValue(new LazyBinding(() => Eval(c.Value, env))));
+                    var binding = wb;  // Capture the binding, not the loop variable
+                    whereEnv.Set(wb.Name, new LazyValue(new LazyBinding(() => Eval(binding.Value, whereEnv))));
                 }
+
+            // Copy where bindings into the main environment for body statement use
+            // Keep as lazy values - they will be resolved on first access via ResolveVar
+            foreach (var wb in (body.WhereBindings ?? new List<LetBinding>()))
+            {
+                var whereBinding = whereEnv.Get(wb.Name);
+                if (whereBinding != null)
+                    env.Set(wb.Name, whereBinding);
+            }
 
             var outputFields = new Dictionary<string, DslValue>();
             DslValue? lastResult = null;
+            var assignedReturnVars = new HashSet<string>();
+            var returnVarSet = new HashSet<string>(returnVarNames);
 
+            // Execute statements - return variables become accessible after assignment
             foreach (var stmt in body.Statements)
             {
                 if (stmt is AssignmentStmt asgn)
@@ -178,8 +226,10 @@ namespace TclInterpreter.Execution
                         lastResult = value;
                     else if (asgn.Targets.Count == 1)
                     {
-                        env.Set(asgn.Targets[0], value);
-                        outputFields[asgn.Targets[0]] = value;
+                        var target = asgn.Targets[0];
+                        env.Set(target, value);
+                        outputFields[target] = value;
+                        assignedReturnVars.Add(target);
                         lastResult = value;
                     }
                     else
@@ -192,6 +242,7 @@ namespace TclInterpreter.Execution
                                 {
                                     env.Set(t, fv);
                                     outputFields[t] = fv;
+                                    assignedReturnVars.Add(t);
                                 }
                                 else
                                     throw new ExecutionException($"Multi-target: key '{t}' not found");
@@ -202,15 +253,97 @@ namespace TclInterpreter.Execution
                             throw new ExecutionException("Multi-target assignment requires object result");
                     }
                 }
+                else if (stmt is ConditionalChainStmt ccs)
+                {
+                    // Handle conditional chain (expr if cond | expr if cond | expr)
+                    DslValue result = EvalConditionalChain(ccs, env);
+                    lastResult = result;
+                }
             }
 
-            if (outputFields.Count > 0)
+            // Validate and process return variables
+            if (returnVarSet.Count > 0)
             {
+                // Special case: single return variable with no explicit assignment uses lastResult
+                if (returnVarSet.Count == 1 && assignedReturnVars.Count == 0)
+                {
+                    if (lastResult != null)
+                        return lastResult;  // Return the value directly, NOT wrapped
+                    else
+                        throw new ExecutionException($"Return variable '{returnVarSet.First()}' was not assigned");
+                }
+                // Multiple return variables with no explicit assignment: check if lastResult matches
+                else if (returnVarSet.Count > 1 && assignedReturnVars.Count == 0)
+                {
+                    if (lastResult is ObjectValue resultObj)
+                    {
+                        // Extract string keys from result
+                        var resultKeyStrings = new HashSet<string>();
+                        foreach (var k in resultObj.Fields.Keys)
+                        {
+                            if (k is string str)
+                                resultKeyStrings.Add(str);
+                        }
+                        
+                        // If result has exactly the right keys (as strings), return it as-is
+                        if (returnVarSet.SetEquals(resultKeyStrings))
+                        {
+                            return resultObj;  // Return the conditional result directly
+                        }
+                        else
+                        {
+                            // Doesn't match - this is an error
+                            throw new ExecutionException(
+                                $"Return variables not assigned: expected {{{string.Join(", ", returnVarSet)}}}, " +
+                                $"but conditional returned keys {{{string.Join(", ", resultKeyStrings)}}}");
+                        }
+                    }
+                    else
+                    {
+                        // lastResult is null or not an object - error
+                        throw new ExecutionException(
+                            $"Return variables not assigned: expected {{{string.Join(", ", returnVarSet)}}}, " +
+                            $"but conditional returned {lastResult?.GetDslType().TypeName ?? "null"}");
+                    }
+                }
+                else
+                {
+                    // Multiple returns or explicit assignment: all must be assigned
+                    var unassigned = returnVarSet.Except(assignedReturnVars).ToList();
+                    if (unassigned.Count > 0)
+                        throw new ExecutionException($"Return variable(s) not assigned: {string.Join(", ", unassigned)}");
+                    
+                    // Return output fields as an object (only for explicit multi-return assignments)
+                    if (outputFields.Count > 0)
+                    {
+                        var r = new ObjectValue();
+                        foreach (var (k, v) in outputFields) r.Fields[k] = v;
+                        return r;
+                    }
+                }
+            }
+            else if (outputFields.Count > 0)
+            {
+                // No return signature, but assignments were made - return them
                 var r = new ObjectValue();
                 foreach (var (k, v) in outputFields) r.Fields[k] = v;
                 return r;
             }
+
+            // No explicit return variables - return lastResult if available
             return lastResult ?? new ObjectValue();
+        }
+
+        private DslValue EvalConditionalChain(ConditionalChainStmt ccs, Environment env)
+        {
+            foreach (var (condition, value) in ccs.Branches)
+            {
+                if (IsTruthy(Eval(condition, env)))
+                    return Eval(value, env);
+            }
+            if (ccs.DefaultValue != null)
+                return Eval(ccs.DefaultValue, env);
+            throw new ExecutionException("Conditional chain: no branch matched and no default provided");
         }
 
         private DslValue Eval(Expression expr, Environment env)
@@ -657,9 +790,9 @@ namespace TclInterpreter.Execution
             env.PushScope();
             foreach (var b in we.Bindings)
             {
-                var c = b;
+                var binding = b;  // Capture the binding, not the loop variable
                 env.Set(b.Name,
-                    new LazyValue(new LazyBinding(() => Eval(c.Value, env))));
+                    new LazyValue(new LazyBinding(() => Eval(binding.Value, env))));
             }
             var r = Eval(we.MainExpr, env);
             env.PopScope();

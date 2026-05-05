@@ -1,7 +1,7 @@
 {
   "marks": {
-    "1": { "jury": { "A": true, "B": false, "C": true, "D": true, "E": false } },
-    "2": { "jury": { "A": true, "B": true, "C": true, "D": true, "E": true } },
-    "3": { "jury": { "A": false, "B": false, "C": true, "D": false, "E": false } }
+    "101": { "jury": { "A": true, "B": false, "C": true, "D": true, "E": false } },
+    "102": { "jury": { "A": true, "B": true, "C": true, "D": true, "E": true } },
+    "103": { "jury": { "A": false, "B": false, "C": true, "D": false, "E": false } }
   }
 }

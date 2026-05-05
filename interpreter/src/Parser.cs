@@ -561,9 +561,9 @@ namespace TclInterpreter.Parsing
                     foreach (var n in names)
                     {
                         bindings.Add(new LetBinding(n,
-                            new IndexExpr(
-                                new IdentifierExpr(syntheticName),
-                                new StringLiteral(n))));
+                            WithLocation(new IndexExpr(
+                                WithLocation(new IdentifierExpr(syntheticName)),
+                                WithLocation(new StringLiteral(n))))));
                     }
                 }
 
@@ -824,10 +824,10 @@ namespace TclInterpreter.Parsing
                 {
                     Advance();
                     var end = ParseExpression();
-                    return new RangeExpr(new IdentifierExpr(name), end);
+                    return WithLocation(new RangeExpr(WithLocation(new IdentifierExpr(name)), end));
                 }
 
-                return new IdentifierExpr(name);
+                return WithLocation(new IdentifierExpr(name));
             }
 
             throw Error($"Unexpected token: {Cur()}");
