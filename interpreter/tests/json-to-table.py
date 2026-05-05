@@ -9,6 +9,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from pprint import pprint
 
 
 def get_leaf_keys(obj: Any, path: List[str] = None) -> Dict[Tuple, Any]:
@@ -58,13 +59,12 @@ def generate_html_table(data: Dict[str, Any], title: str = None) -> str:
     """
     col_paths = get_all_column_paths(data)
     row_keys = sorted(data.keys())
-    
+
     if not col_paths or not row_keys:
         return '<p>No data to display</p>'
     
     # Determine nesting depth
-    max_depth = max(len(p) for p in col_paths)
-    group_depth = max_depth - 1  # intermediate levels before leaf
+    group_depth = max(len(p) for p in col_paths)
     
     html = ['<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse">']
     
@@ -79,11 +79,10 @@ def generate_html_table(data: Dict[str, Any], title: str = None) -> str:
         if level == 0:
             html.append(f'<th rowspan="{group_depth + 1}">Item</th>')
         
-        # Track which group labels we've already shown at this level
-        seen_labels = set()
-        
         # Group columns by their path up to this level
         current_group_key = None
+        current_group_label = None
+        current_group_style = None
         group_start_idx = 0
         
         for idx, path in enumerate(col_paths):
@@ -92,48 +91,27 @@ def generate_html_table(data: Dict[str, Any], title: str = None) -> str:
             
             # Check if we've moved to a new group
             if group_key != current_group_key:
-                # Output colspan for previous group
                 if current_group_key is not None:
+                    # Output colspan for previous group
                     colspan = idx - group_start_idx
-                    group_label = current_group_key[level]
-                    
-                    # Check if this label has been shown before at this level
-                    if group_label in seen_labels:
-                        # This is a repetition - leave blank with no border
-                        html.append(f'<th colspan="{colspan}" style="border-bottom:none"></th>')
-                    else:
-                        # First occurrence - show the label
-                        html.append(f'<th colspan="{colspan}">{group_label}</th>')
-                        seen_labels.add(group_label)
+                    html.append(f'<th colspan="{colspan}" style="{current_group_style}">{current_group_label}</th>')
                 
                 # Start new group
                 current_group_key = group_key
+                if level < len(group_key):
+                    current_group_label = group_key[level]
+                    current_group_style = 'border-bottom:none;' # needed to collapse with empty cell below (if any)
+                else:
+                    current_group_label = '&nbsp;' # non-breaking space for empty group
+                    current_group_style = 'border-top:none; border-bottom:none;'
                 group_start_idx = idx
         
         # Don't forget the last group
         if current_group_key is not None:
             colspan = len(col_paths) - group_start_idx
-            group_label = current_group_key[level]
-            
-            # Check if this label has been shown before at this level
-            if group_label in seen_labels:
-                # This is a repetition - leave blank with no border
-                html.append(f'<th colspan="{colspan}" style="border-bottom:none"></th>')
-            else:
-                # First occurrence - show the label
-                html.append(f'<th colspan="{colspan}">{group_label}</th>')
-                seen_labels.add(group_label)
+            html.append(f'<th colspan="{colspan}" style="{current_group_style}">{current_group_label}</th>')
         
         html.append('</tr>')
-    
-    # Column leaf header row
-    html.append('<tr>')
-    if group_depth == 0:
-        html.append('<th>Item</th>')
-    for path in col_paths:
-        leaf_key = path[-1]
-        html.append(f'<th>{leaf_key}</th>')
-    html.append('</tr>')
     
     html.append('</thead>')
     
