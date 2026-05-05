@@ -120,9 +120,9 @@ namespace TclInterpreter.Parsing
         Expression? DefaultValue       // final branch without condition
     ) : Statement;
 
-    /// <summary>Binding in a where clause: name = expr  (possibly with trailing comma/semicolon).</summary>
+    /// <summary>Binding in a where clause: name = expr or name1, name2, ... = expr (possibly with trailing comma/semicolon).</summary>
     public record LetBinding(
-        string Name,
+        List<string> Names,  // multiple names for multi-target bindings
         Expression Value
     ) : AstNode;
 

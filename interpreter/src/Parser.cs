@@ -547,26 +547,8 @@ namespace TclInterpreter.Parsing
 
                 if (names.Count == 1)
                 {
-                    bindings.Add(new LetBinding(names[0], value));
+                                        bindings.Add(new LetBinding(names, value));
                 }
-                else
-                {
-                    // Multi-target where binding: desugar into individual bindings
-                    // The value expression is shared; at runtime it returns an object
-                    // with keys matching the binding names.
-                    // We create a synthetic let-binding for the tuple, then
-                    // individual bindings that index into it.
-                    var syntheticName = $"__multi_{string.Join("_", names)}_{_pos}";
-                    bindings.Add(new LetBinding(syntheticName, value));
-                    foreach (var n in names)
-                    {
-                        bindings.Add(new LetBinding(n,
-                            WithLocation(new IndexExpr(
-                                WithLocation(new IdentifierExpr(syntheticName)),
-                                WithLocation(new StringLiteral(n))))));
-                    }
-                }
-
                 // Bindings separated by comma or semicolon
                 if (Check(TokenType.Comma))
                     Advance();
@@ -900,7 +882,7 @@ namespace TclInterpreter.Parsing
                 var name = Advance().Value;
                 Expect(TokenType.Equals, "Expected '='");
                 var value = ParseExpression();
-                bindings.Add(new LetBinding(name, value));
+                                bindings.Add(new LetBinding(new List<string> { name }, value));
 
                 if (Check(TokenType.Comma))
                     Advance();

@@ -7,10 +7,10 @@ evaluate_dance_elimination(template_evaluate_element):
     /// marks are bool (0/1, 1=TRUE iff crossed), jury is not partitioned
     marks   : { start_no+ : { "jury" : { adjudicator_short+ : bool } } }
 ->
-    /// report number of crosses per participant
-    report  : { start_no+ : { "count" : nat } },            
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } };
+    places  : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } },
+    /// report number of crosses per participant
+    report  : { start_no+ : { "count" : nat } };         
 
 evaluate_dance_elimination(marks) = 
     // below, no value expression given in count() => count non-zero values
@@ -27,10 +27,10 @@ evaluate_dance_final(template_evaluate_element):
     /// marks are natural numbers, jury is not partitioned
     marks   : { start_no+ : { "jury" : { adjudicator_short+ : nat } } } 
 ->
-    /// report, per place except the last, number and sum of same-or-better placings
-    report  : { start_no+ : { place+ : { "count" : nat, "sum" : nat } } },            
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
+    places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } },
+    /// report, per place except the last, number and sum of same-or-better placings
+    report  : { start_no+ : { place+ : { "count" : nat, "sum" : nat } } };         
 
 evaluate_dance_final(marks) = 
     report          = r5to8_report,
@@ -64,19 +64,19 @@ evaluate_round_elimination(template_evaluate_round):
     /// place ranges use natural numbers, place value may be fractional (average)
     places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
-    /// report number of crosses per participant
-    report  : { start_no+ : { "count" : nat } },            
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
+    places_out : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } },
+    /// report number of crosses per participant
+    report_out : { start_no+ : { "count" : nat } };
 
 evaluate_round_elimination(marks, places) = 
-    report = map(
+    report_out = map(
         my_no in field,
         { "count" : sum(dance in marks, count(dance[my_no]["jury"])) }
     ),
     // more crosses is better => must negate report values
     //  -- basic scalar arithmetics, such as prefix minus, are defined element-wise as a language feature
-    places = compute_places(-report)
+    places_out = compute_places(-report_out)
 where
     field = keys(first(places)); // returns object of all key : key mappings (start numbers)
 
@@ -89,18 +89,18 @@ evaluate_round_final(template_evaluate_round):
     /// place ranges use natural numbers, place value may be fractional (average)
     places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
-    /// report sum of place values
-    report  : { start_no+ : { "places-sum" : real } },            
     /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
+    places_out  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } },
+    /// report sum of place values
+    report_out  : { start_no+ : { "places-sum" : real } };  
 
 evaluate_round_final(marks, places) = 
-    report = map(
+    report_out = map(
         my_no in field, 
         { "places-sum" : sum(dance in places, dance[my_no]["pval"]) }
     ),
     // perform ordering by sum (lower is better)
-    places = compute_places(report)
+    places_out = compute_places(report_out)
 where
     field = keys(first(places));
 
@@ -113,23 +113,23 @@ evaluate_round_final_skating(template_evaluate_round):
     /// place ranges use natural numbers, place value may be fractional (average)
     places  : { dance+ : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } } }
 ->
+    /// place ranges use natural numbers, place value may be fractional (average)
+    places_out : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } },
     /// full report including skating stuff
-    report      : { start_no+ : { "places-sum" : real, 
+    report_out :  { start_no+ : { "places-sum" : real, 
                                   place*       : { "R10" : nat, "R11"? : nat },
                                   "R10"?       : { place+ : { "count" : nat, "sum" : real } },
                                   "R11"?       : { place+ : { "count" : nat, "sum" : nat  } }
-                  } },
-    /// place ranges use natural numbers, place value may be fractional (average)
-    places  : { start_no+ : {  "pmin" : nat, "pmax" : nat, "pval" : real } };
+                  } };
 
 evaluate_round_final_skating(marks, places) = 
-    report = report_up,
-    places = compute_places(scores_up) // final scoring delivers final placing
+    report_out = report_up,
+    places_out = compute_places(scores_up) // final scoring delivers final placing
 where
     // number of places in list: all except last possible
     num = count(first(places));
     // invoke majority system as a basis
-    majority_report, majority_places = evaluate_round_final(marks, places),
+    majority_places, majority_report = evaluate_round_final(marks, places),
     // initialize scores with single place value obtained from majority evaluation
     scores_down = map(start in majority_places, { 0 : start["pval"] });
     // invoke recursive refinement from here

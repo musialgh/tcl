@@ -199,16 +199,42 @@ namespace TclInterpreter.Execution
                 foreach (var wb in body.WhereBindings)
                 {
                     var binding = wb;  // Capture the binding, not the loop variable
-                    whereEnv.Set(wb.Name, new LazyValue(new LazyBinding(() => Eval(binding.Value, whereEnv))));
+                    var capturedEnv = whereEnv;  // Capture the whereEnv at this point (for each binding!)
+                    if (wb.Names.Count == 1)
+                    {
+                        whereEnv.Set(wb.Names[0], new LazyValue(new LazyBinding(() => Eval(binding.Value, capturedEnv))));
+                    }
+                    else
+                    {
+                        var lazyMultiValue = new LazyValue(new LazyBinding(() => Eval(binding.Value, capturedEnv)));
+                        for (int i = 0; i < wb.Names.Count; i++)
+                        {
+                            int idx = i;
+                            var targetName = wb.Names[i];
+                            whereEnv.Set(targetName, new LazyValue(new LazyBinding(() =>
+                            {
+                                var result = lazyMultiValue.Binding.Value;
+                                if (result is ObjectValue ov)
+                                {
+                                    var values = ov.Fields.Values.ToList();
+                                    if (idx < values.Count) return values[idx];
+                                }
+                                throw new ExecutionException($"Multi-target binding: cannot extract value at index {idx}");
+                            })));
+                        }
+                    }
                 }
 
             // Copy where bindings into the main environment for body statement use
             // Keep as lazy values - they will be resolved on first access via ResolveVar
             foreach (var wb in (body.WhereBindings ?? new List<LetBinding>()))
             {
-                var whereBinding = whereEnv.Get(wb.Name);
-                if (whereBinding != null)
-                    env.Set(wb.Name, whereBinding);
+                foreach (var name in wb.Names)
+                {
+                    var whereBinding = whereEnv.Get(name);
+                    if (whereBinding != null)
+                        env.Set(name, whereBinding);
+                }
             }
 
             var outputFields = new Dictionary<string, DslValue>();
@@ -236,22 +262,21 @@ namespace TclInterpreter.Execution
                     {
                         if (value is ObjectValue ov)
                         {
-                            // Match targets to return variables by signature order, not by name
+                            // Multi-target assignment: extract values in key order from SortedDictionary
+                            // (keys sorted alphabetically, matching the alphabetically-sorted return values in TCL)
                             if (returnVarSet.Count == asgn.Targets.Count)
                             {
+                                var values = ov.Fields.Values.ToList();
+                                if (values.Count != asgn.Targets.Count)
+                                    throw new ExecutionException($"Multi-target assignment: expected {asgn.Targets.Count} values, got {values.Count}");
+                                
                                 for (int i = 0; i < asgn.Targets.Count; i++)
                                 {
                                     var targetName = asgn.Targets[i];
-                                    var returnVarName = returnVarNames[i];
-                                    
-                                    if (ov.Fields.TryGetValue((object)returnVarName, out var fv))
-                                    {
-                                        env.Set(targetName, fv);
-                                        outputFields[targetName] = fv;
-                                        assignedReturnVars.Add(targetName);
-                                    }
-                                    else
-                                        throw new ExecutionException($"Return variable '{returnVarName}' not found in multi-return result");
+                                    var fv = values[i];
+                                    env.Set(targetName, fv);
+                                    outputFields[targetName] = fv;
+                                    assignedReturnVars.Add(targetName);
                                 }
                                 lastResult = value;
                             }
@@ -799,15 +824,38 @@ namespace TclInterpreter.Execution
             env.PushScope();
             foreach (var b in we.Bindings)
             {
-                var binding = b;  // Capture the binding, not the loop variable
-                env.Set(b.Name,
-                    new LazyValue(new LazyBinding(() => Eval(binding.Value, env))));
+                var binding = b;
+                
+                if (b.Names.Count == 1)
+                {
+                    env.Set(b.Names[0],
+                        new LazyValue(new LazyBinding(() => Eval(binding.Value, env))));
+                }
+                else
+                {
+                    var lazyMultiValue = new LazyValue(new LazyBinding(() => Eval(binding.Value, env)));
+                    for (int i = 0; i < b.Names.Count; i++)
+                    {
+                        int idx = i;
+                        var targetName = b.Names[i];
+                        env.Set(targetName, new LazyValue(new LazyBinding(() =>
+                        {
+                            var result = lazyMultiValue.Binding.Value;
+                            if (result is ObjectValue ov)
+                            {
+                                var values = ov.Fields.Values.ToList();
+                                if (idx < values.Count) return values[idx];
+                            }
+                            throw new ExecutionException($"Multi-target binding: cannot extract value at index {idx}");
+                        })));
+                    }
+                }
             }
             var r = Eval(we.MainExpr, env);
             env.PopScope();
             return r;
         }
-
+        
         private DslValue EvalRange(RangeExpr re, Environment env)
         {
             var s = Eval(re.Start, env);
