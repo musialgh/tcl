@@ -144,11 +144,20 @@ namespace TclInterpreter.Execution
                 {
                     var p = func.ImplParams[i];
                     if (namedArgs.TryGetValue(p, out var v))
+                    {
                         env.Set(p, v);
+                    }
                     else
                     {
                         var dv = GetDefaultValue(func.Name, p);
-                        if (dv != null) env.Set(p, dv);
+                        if (dv != null) 
+                        {
+                            env.Set(p, dv);
+                        }
+                        else
+                        {
+                            throw new ExecutionException($"Missing argument '{p}' for function '{func.Name}'");
+                        }
                     }
                 }
                 // Extract return variable names from signature
