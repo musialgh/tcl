@@ -766,7 +766,11 @@ namespace TclInterpreter.Execution
                     if (ex is ObjectValue eo && v is ObjectValue vo)
                         MergeInto(eo, vo);
                     else
-                        throw new ExecutionException($"merge() conflict on key: {k}");
+                        throw new ExecutionException($"merge() conflict on key: {k}"
+                        + $"\n  LHS: {JsonBridge.SerializeResult(target, indented: false)}"
+                        + $"\n  RHS: {JsonBridge.SerializeResult(source, indented: false)}"
+                        + $"\n"
+                        );
                 }
                 else target.Fields[k] = v;
             }

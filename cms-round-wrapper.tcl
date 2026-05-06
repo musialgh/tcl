@@ -36,3 +36,4 @@ where
     ),
     // hand over to round evaluation, which will use the dance placings as input
     round_places, round_report = evaluate_round_final_skating(marks, dance_places);
+    //round_places, round_report = evaluate_round_final(marks, dance_places);

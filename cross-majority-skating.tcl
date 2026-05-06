@@ -171,12 +171,12 @@ where
     // compute counts and sums for same-or-better placings over whole dances (*no* majority clipping!)
     r10_data        = map(
         start in candidates,
-        { "R10" : { for_place : count_and_sum(for_place, map(dance in places, dance[start]["pval"])) } }    
+        { "rule10" : { for_place : count_and_sum(for_place, map(dance in places, dance[start]["pval"])) } }    
     ),
     // compute R10 score values (negating counts, as higher count is better)
     r10_values      = map(
         start in r10_data, 
-        { 1 : -start["R10"][for_place]["count"], 2 : +start["R10"][for_place]["sum"] }
+        { 1 : -start["rule10"][for_place]["count"], 2 : +start["rule10"][for_place]["sum"] }
     ),
     // determine best value of competing starts
     r10_chosen      = arg_min(r10_values), // returns key -> key mapping(s) for all occurrences of the minimum
@@ -201,9 +201,9 @@ where
 skating_refine_r11(skating_refine_r10); // using r10 signature unchanged => no need to re-define
 
 skating_refine_r11(marks, places, report, scores, for_place) =
-    scores                                                       if for_place > #field |
-    skating_refine_r11(marks, places,     scores, for_place + 1) if #candidates < 2    |
-    skating_refine_r11(marks, places, r11_scores, for_place)
+    { "report_out" : report, "scores_out" : scores }                            if for_place > #field |
+    skating_refine_r10(marks, places,     report,     scores, for_place + 1)    if #candidates < 2    |
+    skating_refine_r10(marks, places, r11_report, r11_scores, for_place + 1)
 where 
     field           = keys(first(places)),
     r11_places      = compute_places(scores),
@@ -224,14 +224,14 @@ where
     r11_data        = map(
         start in candidates,
         { 
-            "R11" : map(
-                place in for_place..#field,             // map() works since range sets key = value pairs
-                count_and_sum_maj(place, r11_marks)
+            "rule11" : map(
+                place in for_place..#field, // map() works since range sets key = value pairs
+                count_and_sum_maj(place, r11_marks[start])
             )
         }
     ),
     // negate counts (higher is better) and use safely-ordered keys -- not relying on "count" < "sum" ;-)
-    r11_values      = map(start in r11_data, map(place in start["R11"], { 1 : -place["count"], 2 : +place["sum"] })),
+    r11_values      = map(start in r11_data, map(place in start["rule11"], { 1 : -place["count"], 2 : +place["sum"] })),
     // determine best value of competing starts
     r11_chosen      = arg_min(r11_values), // returns key -> key mapping(s) for all occurrences of the minimum
     // create a new r11 coulumn using resulting places for all candidates:
@@ -245,9 +245,9 @@ where
     // recursively merge new column with existing score lists
     // -- then, all starts competing for <for_place> have been refined by way of the new column,
     //    while all others are correctly discriminated via the very first column (place-sum) anyway
-    r11_scores      = merge  (scores, r11_placing),
+    r11_scores      = merge(scores, r11_placing),
     // as <r11_data> may overlap with earlier calls, we need to use replace() instead of merge()
-    r11_report      = replace(report, r11_placing, r11_data);
+    r11_report      = replace(merge(report, r11_placing), r11_data);
 
 
 
