@@ -26,6 +26,7 @@ TEST_DIR="$INTERPRETER_DIR/tests"
 TESTS=(
   "evaluate_dance_elimination|test_elimination_dance_001_in.json|test_elimination_dance_001_out.json"
   "evaluate_dance_final|test_final_dance_001_in.json|test_final_dance_001_out.json"
+  "wrap_round_final_skating|test_final_round_tso_P_skating_in.json|test_final_round_tso_P_skating_out.json"
 )
 
 # ---------- build once --------------------------------------------------------
@@ -65,6 +66,7 @@ for entry in "${TESTS[@]}"; do
     --input-file "$input_path" \
     --script "$REPO_ROOT/adjudication.tcl" \
     --script "$REPO_ROOT/cross-majority-skating.tcl" \
+    --script "$REPO_ROOT/cms-round-wrapper.tcl" \
     ) || {
       echo "FAIL (non-zero exit)"
       FAIL=$((FAIL + 1))

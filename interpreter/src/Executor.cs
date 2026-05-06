@@ -4,6 +4,7 @@ using System.Linq;
 using TclInterpreter.Parsing;
 using TclInterpreter.Typing;
 using TclInterpreter.Json;
+using System.IO;
 
 namespace TclInterpreter.Execution
 {
@@ -800,11 +801,24 @@ namespace TclInterpreter.Execution
         {
             if (source is not ObjectValue s)
                 throw new ExecutionException("concat() needs objects");
+            var cmp = new ObjectKeyComparer();
+            var target_last = target.Fields.Count > 0 ? target.Fields.Last().Key : null;
             foreach (var (k, v) in s.Fields)
             {
-                if (target.Fields.ContainsKey(k))
-                    throw new ExecutionException($"concat() key conflict: {k}");
-                target.Fields[k] = v;
+                if (target.Fields.TryGetValue(k, out var ex) && ex is ObjectValue eo && v is ObjectValue vo)
+                {
+                    // recursive concatenate, only the leaves must observe concat's order constraint
+                    ConcatInto(eo, vo);
+                }
+                else if (target_last != null && cmp.Compare(k, target_last) <= 0)
+                {
+                    throw new ExecutionException($"concat() conflict on key: {k}"
+                    + $"\n  LHS: {JsonBridge.SerializeResult(target, indented: false)}"
+                    + $"\n  RHS: {JsonBridge.SerializeResult(source, indented: false)}"
+                    + $"\n"
+                    );
+                }
+                else target.Fields[k] = v;
             }
         }
 
@@ -815,7 +829,17 @@ namespace TclInterpreter.Execution
         {
             if (source is not ObjectValue s)
                 throw new ExecutionException("replace() needs objects");
-            foreach (var (k, v) in s.Fields) target.Fields[k] = v;
+            foreach (var (k, v) in s.Fields)
+            {
+                if (target.Fields.TryGetValue(k, out var ex) && ex is ObjectValue eo && v is ObjectValue vo)
+                {
+                    ReplaceInto(eo, vo);
+                }
+                else
+                {
+                    target.Fields[k] = v;
+                }
+            }
         }
 
         private DslValue EvalAggregation(List<CallArg> args, Environment env,
@@ -841,7 +865,7 @@ namespace TclInterpreter.Execution
             }
 
             var r = new ObjectValue();
-            foreach (var a in args) 
+            foreach (var a in args)
                 combine(r, DeepCopy(Eval(a.Value, env)));
             return r;
         }
@@ -868,19 +892,19 @@ namespace TclInterpreter.Execution
             // Step 1: Validate exactly 1 argument
             if (args.Count != 1)
                 throw new ExecutionException("dump() expects exactly one argument");
-            
+
             // Step 2: Evaluate the argument
             var value = Eval(args[0].Value, env);
-            
+
             // Step 3: Format location prefix
             var location = $"[line {fc.Line}, col {fc.Column}]";
-            
+
             // Step 4: Serialize using existing pattern
             var serialized = JsonBridge.SerializeResult(value, indented: false);
-            
+
             // Step 5: Output to stderr with prefix
-            Console.Error.WriteLine($"{location} DUMP: {serialized}");
-            
+            Console.Error.WriteLine($"DUMP{location}: {serialized}");
+
             // Step 6: Return argument unchanged (pass-through)
             return value;
         }
