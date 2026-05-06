@@ -587,6 +587,18 @@ namespace TclInterpreter.Execution
             return "num";
         }
 
+        private static DslValue DeepCopy(DslValue value)
+        {
+            if (value is ObjectValue ov)
+            {
+                var copy = new ObjectValue();
+                foreach (var (k, v) in ov.Fields)
+                    copy.Fields[k] = DeepCopy(v);
+                return copy;
+            }
+            return value;  // NumericValue, StringValue, BoolValue are immutable
+        }
+        
         private DslValue EvalFunctionCall(FunctionCallExpr fc, Environment env)
         {
             switch (fc.Name)
@@ -818,13 +830,15 @@ namespace TclInterpreter.Execution
                 {
                     env.PushScope();
                     BindIter(env, vars, k, v);
-                    combine(result, ea.Count > 0 ? Eval(ea[0].Value, env) : v);
+                    combine(result, DeepCopy(ea.Count > 0 ? Eval(ea[0].Value, env) : v));
                     env.PopScope();
                 }
                 return result;
             }
+
             var r = new ObjectValue();
-            foreach (var a in args) combine(r, Eval(a.Value, env));
+            foreach (var a in args) 
+                combine(r, DeepCopy(Eval(a.Value, env)));
             return r;
         }
 
