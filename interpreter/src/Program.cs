@@ -23,6 +23,7 @@ namespace TclInterpreter
 
                 var functionName = args[0];
                 var recursionLimit = 10000;
+                var traceCallsEnabled = false;
                 string? inputJson = null;
                 var scriptPaths = new List<string>();
 
@@ -37,6 +38,9 @@ namespace TclInterpreter
                                 Console.Error.WriteLine("Error: Invalid recursion limit");
                                 return 1;
                             }
+                            break;
+                        case "--trace-calls":
+                            traceCallsEnabled = true;
                             break;
                         case "--input-file" when i + 1 < args.Length:
                             inputJson = File.ReadAllText(args[++i]);
@@ -86,7 +90,7 @@ namespace TclInterpreter
 
                 // Execute
                 var inputs = JsonBridge.DeserializeParameters(inputJson);
-                var executor = new Executor(combined, recursionLimit);
+                var executor = new Executor(combined, recursionLimit, traceCallsEnabled);
                 var result = executor.ExecuteFunction(functionName, inputs);
 
                 // Output
@@ -127,13 +131,14 @@ namespace TclInterpreter
             Console.WriteLine();
             Console.WriteLine("Options:");
             Console.WriteLine("  --recursion-limit <N>     Maximum recursion depth (default: 10000)");
+            Console.WriteLine("  --trace-calls             Enable tracing of function calls to stderr");
             Console.WriteLine("  --input-file <path>       Read input from file (default: stdin)");
             Console.WriteLine("  --script <path>           Path to TCL script (repeatable; default: auto-detect)");
             Console.WriteLine();
             Console.WriteLine("Examples:");
             Console.WriteLine("  tcl evaluate_dance_elimination < input.json");
             Console.WriteLine("  tcl compute_places --input-file marks.json --recursion-limit 5000");
-            Console.WriteLine("  tcl evaluate_round_final_skating --script adjudication.tcl --script cross-majority-skating.tcl < input.json");
+            Console.WriteLine("  tcl evaluate_round_final_skating --trace-calls --script adjudication.tcl --script cross-majority-skating.tcl < input.json");
         }
 
         /// <summary>

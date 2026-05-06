@@ -107,10 +107,12 @@ namespace TclInterpreter.Execution
         private readonly Dictionary<string, SignatureDef> _signatures = new();
         private int _recursionDepth;
         private readonly int _maxRecursionDepth;
+        private readonly bool _traceCallsEnabled;
 
-        public Executor(ProgramNode program, int maxRecursionDepth = 10000)
+        public Executor(ProgramNode program, int maxRecursionDepth = 10000, bool traceCallsEnabled = false)
         {
             _maxRecursionDepth = maxRecursionDepth;
+            _traceCallsEnabled = traceCallsEnabled;
             foreach (var def in program.Definitions)
             {
                 switch (def)
@@ -162,17 +164,19 @@ namespace TclInterpreter.Execution
                     }
                 }
                 // Report all input bindings (DEBUG)
-                Console.Error.WriteLine($"CALLING: {func.Name}");
-                foreach (var p in func.ImplParams)
+                if (_traceCallsEnabled)
                 {
-                    var readable = "null";
-                    if (namedArgs.TryGetValue(p, out var v))
+                    Console.Error.WriteLine($"CALLING: {func.Name}");
+                    foreach (var p in func.ImplParams)
                     {
-                        readable = JsonBridge.SerializeResult(v, indented: false);
+                        var readable = "null";
+                        if (namedArgs.TryGetValue(p, out var v))
+                        {
+                            readable = JsonBridge.SerializeResult(v, indented: false);
+                        }
+                        Console.Error.WriteLine($"  arg {p} = {readable}");
                     }
-                    Console.Error.WriteLine($"  arg {p} = {readable}");
                 }
-
                 // Extract return variable names from signature
                 // First try signature attached to function; if not, look up in signatures dict
                 var sig = func.Signature;
@@ -598,7 +602,7 @@ namespace TclInterpreter.Execution
             }
             return value;  // NumericValue, StringValue, BoolValue are immutable
         }
-        
+
         private DslValue EvalFunctionCall(FunctionCallExpr fc, Environment env)
         {
             switch (fc.Name)
