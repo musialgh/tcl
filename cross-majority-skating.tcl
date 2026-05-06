@@ -245,7 +245,7 @@ where
     // recursively merge new column with existing score lists
     // -- then, all starts competing for <for_place> have been refined by way of the new column,
     //    while all others are correctly discriminated via the very first column (place-sum) anyway
-    r11_scores      = merge(scores, r11_placing),
+    r11_scores      = merge(dump(scores), dump(r11_placing)),
     // as <r11_data> may overlap with earlier calls, we need to use replace() instead of merge()
     r11_report      = replace(merge(report, r11_placing), r11_data);
 

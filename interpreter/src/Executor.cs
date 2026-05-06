@@ -601,6 +601,7 @@ namespace TclInterpreter.Execution
                 case "concat": return EvalConcat(fc.Arguments, env);
                 case "replace": return EvalReplace(fc.Arguments, env);
                 case "arg_min": return EvalArgMin(fc.Arguments, env);
+                case "dump": return EvalDump(fc.Arguments, fc, env);
             }
 
             if (_functions.TryGetValue(fc.Name, out var func))
@@ -842,6 +843,28 @@ namespace TclInterpreter.Execution
                 if (ObjectKeyComparer.CompareValues(v, min!) == 0)
                     r.Fields[k] = KeyToDsl(k);
             return r;
+        }
+
+        private DslValue EvalDump(List<CallArg> args, FunctionCallExpr fc, Environment env)
+        {
+            // Step 1: Validate exactly 1 argument
+            if (args.Count != 1)
+                throw new ExecutionException("dump() expects exactly one argument");
+            
+            // Step 2: Evaluate the argument
+            var value = Eval(args[0].Value, env);
+            
+            // Step 3: Format location prefix
+            var location = $"[line {fc.Line}, col {fc.Column}]";
+            
+            // Step 4: Serialize using existing pattern
+            var serialized = JsonBridge.SerializeResult(value, indented: false);
+            
+            // Step 5: Output to stderr with prefix
+            Console.Error.WriteLine($"{location} DUMP: {serialized}");
+            
+            // Step 6: Return argument unchanged (pass-through)
+            return value;
         }
 
         private DslValue EvalIndex(IndexExpr idx, Environment env)
