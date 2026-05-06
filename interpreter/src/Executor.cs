@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TclInterpreter.Parsing;
 using TclInterpreter.Typing;
+using TclInterpreter.Json;
 
 namespace TclInterpreter.Execution
 {
@@ -434,6 +435,8 @@ namespace TclInterpreter.Execution
             }
             catch (ExecutionException ex) when (ex.Line == 0)
             {
+                Console.Error.WriteLine($"[DEBUG-EVAL] Catching ex with Line=0: {ex.Message}");
+                Console.Error.WriteLine($"[DEBUG-EVAL] Current expr: {expr.GetType().Name} at line {expr.Line}, col {expr.Column}");
                 // Re-throw with location info if not already present
                 throw new ExecutionException(ex.Message.Replace(" at line 0, col 0", ""), expr.Line, expr.Column);
             }
@@ -461,7 +464,7 @@ namespace TclInterpreter.Execution
                 "-" => Negate(operand),
                 "+" => UnaryPlus(operand),
                 "#" => Cardinality(operand),
-                _ => throw new ExecutionException($"Unknown unary operator: {op.Operator}")
+                _ => throw new ExecutionException($"Unknown unary operator: {op.Operator}", op.Line, op.Column)
             };
         }
 
@@ -536,14 +539,14 @@ namespace TclInterpreter.Execution
                     "<=" => new BoolValue(ln.Value <= rn.Value),
                     ">=" => new BoolValue(ln.Value >= rn.Value),
                     "=" => new BoolValue(ln.Value == rn.Value),
-                    _ => throw new ExecutionException($"Unknown operator: {op.Operator}")
+                    _ => throw new ExecutionException($"Unknown operator: {op.Operator}", op.Line, op.Column)
                 };
 
             if (left is BoolValue lb && right is BoolValue rb)
                 return op.Operator switch
                 {
                     "=" => new BoolValue(lb.Value == rb.Value),
-                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to bools")
+                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to bools", op.Line, op.Column)
                 };
 
             if (left is ObjectValue lo && right is ObjectValue ro)
@@ -554,11 +557,16 @@ namespace TclInterpreter.Execution
                     "<=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) <= 0),
                     ">=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) >= 0),
                     "=" => new BoolValue(ObjectKeyComparer.CompareValues(lo, ro) == 0),
-                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to objects")
+                    _ => throw new ExecutionException($"Cannot apply '{op.Operator}' to objects", op.Line, op.Column)
                 };
 
+            // *not* supporting mixed comparisons here is deliberate -- indicates user error!
+
             throw new ExecutionException(
-                $"Cannot apply '{op.Operator}' to {left.GetDslType().TypeName} and {right.GetDslType().TypeName}");
+                $"Cannot apply '{op.Operator}' to {left.GetDslType().TypeName} and {right.GetDslType().TypeName}" +
+                $"\n Left value: {JsonBridge.SerializeResult(left, indented : false)}" +
+                $"\n Right value: {JsonBridge.SerializeResult(right, indented : false)}" +
+                $"\n", op.Line, op.Column);
         }
 
         private static string CombineType(NumericValue a, NumericValue b)
