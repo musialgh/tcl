@@ -182,10 +182,12 @@ namespace TclInterpreter.Execution
 
         private DslValue ExecuteBody(FunctionBody body, Environment env, List<string> returnVarNames)
         {
+            //Console.Error.WriteLine($"[DEBUG] ExecuteBody START - env visible vars: {string.Join(", ", env.GetAllVisible().Keys)}");
+
             // Create a restricted environment for where clause evaluation
             // It can only see: function parameters (not return variables or body assignments)
             var whereEnv = new Environment();
-            
+
             // Copy parameters into whereEnv
             var allVars = env.GetAllVisible();
             foreach (var (name, value) in allVars)
@@ -193,37 +195,54 @@ namespace TclInterpreter.Execution
                 whereEnv.Set(name, value);
             }
 
-            // Set up where clause bindings in the restricted environment
+            // Set up where-clause bindings in the where environment
             // These can reference parameters and other where bindings, but NOT return variables
             if (body.WhereBindings != null)
-                foreach (var wb in body.WhereBindings)
+            {
+                //Console.Error.WriteLine($"[DEBUG] Where-bindings count: {body.WhereBindings.Count}");
+                foreach (var b in body.WhereBindings)
                 {
-                    var binding = wb;  // Capture the binding, not the loop variable
-                    var capturedEnv = whereEnv;  // Capture the whereEnv at this point (for each binding!)
-                    if (wb.Names.Count == 1)
+                    //Console.Error.WriteLine($"[DEBUG] Setting up where-binding with targets: {string.Join(", ", b.Names)}");
+
+                    // prepare LazyBinding -- will be used 
+                    // as binding for single target,
+                    // or as a shared binding for multi-target cases
+                    var groupBinding = new LazyBinding(() => 
                     {
-                        whereEnv.Set(wb.Names[0], new LazyValue(new LazyBinding(() => Eval(binding.Value, capturedEnv))));
+                        //Console.Error.WriteLine($"[DEBUG] Evaluating binding for RHS: {string.Join(", ", b.Names)}");
+                        //Console.Error.WriteLine($"[DEBUG] whereEnv visible vars: {string.Join(", ", whereEnv.GetAllVisible().Keys)}");
+                        var result = Eval(b.Value, whereEnv);
+                        return result;
+                    });
+
+                    if (b.Names.Count == 1)
+                    {
+                        // Single-target binding: standard lazy evaluation
+                        whereEnv.Set(b.Names[0], new LazyValue(groupBinding));
                     }
                     else
                     {
-                        var lazyMultiValue = new LazyValue(new LazyBinding(() => Eval(binding.Value, capturedEnv)));
-                        for (int i = 0; i < wb.Names.Count; i++)
+                        // Multi-target binding: need 
+                        // * one binding per target to capture the target index, plus
+                        // * the group binding to take care of evaluation and caching
+                        for (int i = 0; i < b.Names.Count; i++)
                         {
-                            int idx = i;
-                            var targetName = wb.Names[i];
+                            int idx = i;  // Closure capture to prevent loop variable capture
+                            var targetName = b.Names[i];
+
                             whereEnv.Set(targetName, new LazyValue(new LazyBinding(() =>
                             {
-                                var result = lazyMultiValue.Binding.Value;
-                                if (result is ObjectValue ov)
-                                {
-                                    var values = ov.Fields.Values.ToList();
-                                    if (idx < values.Count) return values[idx];
-                                }
+                                // Access the shared cached result and extract position
+                                var obj = groupBinding.Value;  // Triggers single evaluation
+                                if (obj is ObjectValue ov)
+                                    return ov.Fields.Values.ToList()[idx];
+
                                 throw new ExecutionException($"Multi-target binding: cannot extract value at index {idx}");
                             })));
                         }
                     }
                 }
+            }
 
             // Copy where bindings into the main environment for body statement use
             // Keep as lazy values - they will be resolved on first access via ResolveVar
@@ -234,6 +253,8 @@ namespace TclInterpreter.Execution
                     var whereBinding = whereEnv.Get(name);
                     if (whereBinding != null)
                         env.Set(name, whereBinding);
+                    else
+                        throw new ExecutionException($"'{name}' NOT FOUND in whereEnv (internal error)");
                 }
             }
 
@@ -269,7 +290,7 @@ namespace TclInterpreter.Execution
                                 var values = ov.Fields.Values.ToList();
                                 if (values.Count != asgn.Targets.Count)
                                     throw new ExecutionException($"Multi-target assignment: expected {asgn.Targets.Count} values, got {values.Count}");
-                                
+
                                 for (int i = 0; i < asgn.Targets.Count; i++)
                                 {
                                     var targetName = asgn.Targets[i];
@@ -318,7 +339,7 @@ namespace TclInterpreter.Execution
                             if (k is string str)
                                 resultKeyStrings.Add(str);
                         }
-                        
+
                         // If result has exactly the right keys (as strings), return it as-is
                         if (returnVarSet.SetEquals(resultKeyStrings))
                         {
@@ -346,7 +367,7 @@ namespace TclInterpreter.Execution
                     var unassigned = returnVarSet.Except(assignedReturnVars).ToList();
                     if (unassigned.Count > 0)
                         throw new ExecutionException($"Return variable(s) not assigned: {string.Join(", ", unassigned)}");
-                    
+
                     // Return output fields as an object (only for explicit multi-return assignments)
                     if (outputFields.Count > 0)
                     {
@@ -822,30 +843,48 @@ namespace TclInterpreter.Execution
         private DslValue EvalWhere(WhereExpr we, Environment env)
         {
             env.PushScope();
+
+            // Set up inline where bindings
             foreach (var b in we.Bindings)
             {
-                var binding = b;
-                
                 if (b.Names.Count == 1)
                 {
-                    env.Set(b.Names[0],
-                        new LazyValue(new LazyBinding(() => Eval(binding.Value, env))));
+                    // Single-target binding: standard lazy evaluation
+                    env.Set(b.Names[0], new LazyValue(new LazyBinding(() => Eval(b.Value, env))));
                 }
                 else
                 {
-                    var lazyMultiValue = new LazyValue(new LazyBinding(() => Eval(binding.Value, env)));
+                    // Multi-target binding: trigger-all-on-first-access
+                    var evaluated = new bool[1] { false };  // Shared state: has group been evaluated?
+                    var values = new DslValue[b.Names.Count];  // Shared state: extracted values
+
+                    // Create lazy binding for each target
                     for (int i = 0; i < b.Names.Count; i++)
                     {
-                        int idx = i;
+                        int idx = i;  // Closure capture to prevent loop variable capture
                         var targetName = b.Names[i];
+
                         env.Set(targetName, new LazyValue(new LazyBinding(() =>
                         {
-                            var result = lazyMultiValue.Binding.Value;
-                            if (result is ObjectValue ov)
+                            // If not yet evaluated, evaluate RHS once and extract all values
+                            if (!evaluated[0])
                             {
-                                var values = ov.Fields.Values.ToList();
-                                if (idx < values.Count) return values[idx];
+                                var result = Eval(b.Value, env);
+                                if (result is ObjectValue ov)
+                                {
+                                    var extractedValues = ov.Fields.Values.ToList();
+                                    for (int j = 0; j < b.Names.Count && j < extractedValues.Count; j++)
+                                    {
+                                        values[j] = extractedValues[j];
+                                    }
+                                }
+                                evaluated[0] = true;
                             }
+
+                            // Return value for this target
+                            if (idx < values.Length)
+                                return values[idx];
+
                             throw new ExecutionException($"Multi-target binding: cannot extract value at index {idx}");
                         })));
                     }
@@ -855,7 +894,7 @@ namespace TclInterpreter.Execution
             env.PopScope();
             return r;
         }
-        
+
         private DslValue EvalRange(RangeExpr re, Environment env)
         {
             var s = Eval(re.Start, env);

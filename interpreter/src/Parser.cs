@@ -545,10 +545,9 @@ namespace TclInterpreter.Parsing
                 Expect(TokenType.Equals, "Expected '='");
                 var value = ParseConditionalChainOrExpression();
 
-                if (names.Count == 1)
-                {
-                                        bindings.Add(new LetBinding(names, value));
-                }
+                // add binding (may be single-target or multi-target)
+                bindings.Add(new LetBinding(names, value));
+                
                 // Bindings separated by comma or semicolon
                 if (Check(TokenType.Comma))
                     Advance();
