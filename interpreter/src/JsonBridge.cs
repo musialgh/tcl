@@ -155,10 +155,9 @@ namespace TclInterpreter.Json
                     int i => i.ToString(CultureInfo.InvariantCulture),
                     decimal d => d.ToString(CultureInfo.InvariantCulture),
                     string s => s,
-                    ObjectValue => throw new JsonBridgeException(
-                        $"Object keys may only be strings or numbers for JSON serialization, got object key"),
+                    ObjectValue o => QuoteObject((ObjectValue)key), // see below (hack)
                     _ => throw new JsonBridgeException(
-                        $"Object keys may only be strings or numbers, got: {key.GetType().Name}")
+                        $"Unexpected key type, got: {key.GetType().Name}")
                 };
 
                 writer.WritePropertyName(keyStr);
@@ -166,6 +165,14 @@ namespace TclInterpreter.Json
             }
 
             writer.WriteEndObject();
+        }
+
+        private static string QuoteObject(ObjectValue ov)
+        {
+            // This is a tiny hack: JSON does not support object keys. We do not really need them.
+            // But for debugging purposes without throwing exceptions, let's just quote the thingy as a string key.
+            // Should even be usable as an input in many cases. But not always.
+            return "_" + SerializeResult(ov, indented: false).Replace("\"", "") + "_";
         }
     }
 }

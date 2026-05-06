@@ -491,7 +491,7 @@ namespace TclInterpreter.Parsing
                 elseExpr = ParseConditionalChainRest(elseExpr);
             }
 
-            return new ConditionalExpr(thenExpr, condition, elseExpr);
+            return WithLocation(new ConditionalExpr(thenExpr, condition, elseExpr));
         }
 
         private Statement WrapInStatement(Expression expr)
@@ -647,7 +647,7 @@ namespace TclInterpreter.Parsing
             {
                 var op = Advance().Value;
                 var right = ParseAdditive();
-                expr = new BinaryOpExpr(op, expr, right);
+                expr = WithLocation(new BinaryOpExpr(op, expr, right));
             }
             
             return expr;
@@ -674,7 +674,7 @@ namespace TclInterpreter.Parsing
             {
                 var op = Advance().Value;
                 var right = ParseMultiplicative();
-                expr = new BinaryOpExpr(op, expr, right);
+                expr = WithLocation(new BinaryOpExpr(op, expr, right));
             }
             
             return expr;
@@ -688,7 +688,7 @@ namespace TclInterpreter.Parsing
             {
                 var op = Advance().Value;
                 var right = ParseUnary();
-                expr = new BinaryOpExpr(op, expr, right);
+                expr = WithLocation(new BinaryOpExpr(op, expr, right));
             }
             
             return expr;
@@ -701,7 +701,7 @@ namespace TclInterpreter.Parsing
             {
                 var op = Advance().Value;
                 var operand = ParseUnary();
-                return new UnaryOpExpr(op, operand);
+                return WithLocation(new UnaryOpExpr(op, operand));
             }
             
             return ParsePostfix();
@@ -735,10 +735,10 @@ namespace TclInterpreter.Parsing
                 {
                     Advance();
                     var end = ParseExpression();
-                    return new RangeExpr(new IntLiteral(value), end);
+                    return WithLocation(new RangeExpr(WithLocation(new IntLiteral(value)), end));
                 }
 
-                return new IntLiteral(value);
+                return WithLocation(new IntLiteral(value));
             }
 
             // Real literal
@@ -746,31 +746,31 @@ namespace TclInterpreter.Parsing
             {
                 var tok = Advance();
                 var value = decimal.Parse(tok.Value, CultureInfo.InvariantCulture);
-                return new RealLiteral(value);
+                return WithLocation(new RealLiteral(value));
             }
 
             // String literal
             if (Check(TokenType.StringLiteral))
             {
-                return new StringLiteral(Advance().Value);
+                return WithLocation(new StringLiteral(Advance().Value));
             }
             
             // Boolean literals
             if (Check(TokenType.KwTrue))
             {
                 Advance();
-                return new BoolLiteral(true);
+                return WithLocation(new BoolLiteral(true));
             }
             if (Check(TokenType.KwFalse))
             {
                 Advance();
-                return new BoolLiteral(false);
+                return WithLocation(new BoolLiteral(false));
             }
 
             // Object literal: { ... }
             if (Check(TokenType.LeftBrace))
             {
-                return ParseObjectLiteralExpr();
+                return WithLocation(ParseObjectLiteralExpr());
             }
             
             // Parenthesized expression
@@ -797,7 +797,7 @@ namespace TclInterpreter.Parsing
                     var args = ParseCallArgs();
                     _parenDepth--;
                     Expect(TokenType.RightParen, "Expected ')'");
-                    return new FunctionCallExpr(name, args);
+                    return WithLocation(new FunctionCallExpr(name, args));
                 }
 
                 // Range: identifier '..' expr
@@ -830,7 +830,7 @@ namespace TclInterpreter.Parsing
             if (Check(TokenType.RightBrace))
             {
                 Advance();
-                return new ObjectLiteral(new List<(Expression, Expression)>());
+                return WithLocation(new ObjectLiteral(new List<(Expression, Expression)>()));
             }
 
             var fields = new List<(Expression Key, Expression Value)>();
@@ -850,7 +850,7 @@ namespace TclInterpreter.Parsing
 
             Expect(TokenType.RightBrace, "Expected '}'");
 
-            Expression result = new ObjectLiteral(fields);
+            Expression result = WithLocation(new ObjectLiteral(fields));
 
             // Check for inline 'where' — only when inside parentheses (e.g. function call args)
             // At top level of a function body, 'where' belongs to the body, not the object.
@@ -858,7 +858,7 @@ namespace TclInterpreter.Parsing
             {
                 Advance();
                 var bindings = ParseInlineWhereBindings();
-                result = new WhereExpr(result, bindings);
+                result = WithLocation(new WhereExpr(result, bindings));
             }
 
             return result;

@@ -159,7 +159,7 @@ skating_refine_r10:
                                   place* : { "R10" : nat, "R11"? : nat }    // places assigned by skating
                   } };
 
-skating_refine_r10(marks, places, scores, for_place) =
+skating_refine_r10(marks, places, report, scores, for_place) =
     { "report_out" : report, "scores_out" : scores }                            if for_place > #field |
     skating_refine_r10(marks, places,     report,     scores, for_place + 1)    if #candidates < 2    |
     skating_refine_r11(marks, places, r10_report, r10_scores, for_place    )
@@ -200,7 +200,7 @@ where
 /// but then recursively invoke R10 on the next place
 skating_refine_r11(skating_refine_r10); // using r10 signature unchanged => no need to re-define
 
-skating_refine_r11(marks, places, scores, for_place) =
+skating_refine_r11(marks, places, report, scores, for_place) =
     scores                                                       if for_place > #field |
     skating_refine_r11(marks, places,     scores, for_place + 1) if #candidates < 2    |
     skating_refine_r11(marks, places, r11_scores, for_place)
@@ -215,7 +215,7 @@ where
         map(
             my_marks in dance,
             merge(
-                jkey, my_mark in my_marks,
+                jkey, my_mark in my_marks["jury"],
                 { { 1 : jkey, 2 : dkey } : my_mark } // objects are sortable and may therefore serve as keys
             )
         )    

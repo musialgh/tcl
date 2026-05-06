@@ -151,7 +151,7 @@ namespace TclInterpreter.Execution
                     else
                     {
                         var dv = GetDefaultValue(func.Name, p);
-                        if (dv != null) 
+                        if (dv != null)
                         {
                             env.Set(p, dv);
                         }
@@ -161,6 +161,18 @@ namespace TclInterpreter.Execution
                         }
                     }
                 }
+                // Report all input bindings (DEBUG)
+                Console.Error.WriteLine($"CALLING: {func.Name}");
+                foreach (var p in func.ImplParams)
+                {
+                    var readable = "null";
+                    if (namedArgs.TryGetValue(p, out var v))
+                    {
+                        readable = JsonBridge.SerializeResult(v, indented: false);
+                    }
+                    Console.Error.WriteLine($"  arg {p} = {readable}");
+                }
+
                 // Extract return variable names from signature
                 // First try signature attached to function; if not, look up in signatures dict
                 var sig = func.Signature;
@@ -217,7 +229,7 @@ namespace TclInterpreter.Execution
                     // prepare LazyBinding -- will be used 
                     // as binding for single target,
                     // or as a shared binding for multi-target cases
-                    var groupBinding = new LazyBinding(() => 
+                    var groupBinding = new LazyBinding(() =>
                     {
                         //Console.Error.WriteLine($"[DEBUG] Evaluating binding for RHS: {string.Join(", ", b.Names)}");
                         //Console.Error.WriteLine($"[DEBUG] whereEnv visible vars: {string.Join(", ", whereEnv.GetAllVisible().Keys)}");
@@ -435,8 +447,6 @@ namespace TclInterpreter.Execution
             }
             catch (ExecutionException ex) when (ex.Line == 0)
             {
-                Console.Error.WriteLine($"[DEBUG-EVAL] Catching ex with Line=0: {ex.Message}");
-                Console.Error.WriteLine($"[DEBUG-EVAL] Current expr: {expr.GetType().Name} at line {expr.Line}, col {expr.Column}");
                 // Re-throw with location info if not already present
                 throw new ExecutionException(ex.Message.Replace(" at line 0, col 0", ""), expr.Line, expr.Column);
             }
@@ -563,10 +573,11 @@ namespace TclInterpreter.Execution
             // *not* supporting mixed comparisons here is deliberate -- indicates user error!
 
             throw new ExecutionException(
-                $"Cannot apply '{op.Operator}' to {left.GetDslType().TypeName} and {right.GetDslType().TypeName}" +
-                $"\n Left value: {JsonBridge.SerializeResult(left, indented : false)}" +
-                $"\n Right value: {JsonBridge.SerializeResult(right, indented : false)}" +
-                $"\n", op.Line, op.Column);
+                $"Cannot apply '{op.Operator}' to {left.GetDslType().TypeName} and {right.GetDslType().TypeName}"
+                + $"\n  Left value: {JsonBridge.SerializeResult(left, indented: false)}"
+                + $"\n  Right value: {JsonBridge.SerializeResult(right, indented: false)}"
+                + $"\n "
+                );
         }
 
         private static string CombineType(NumericValue a, NumericValue b)
