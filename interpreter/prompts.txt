@@ -40,3 +40,23 @@ Some clarifications:
 
 Please note that count_and_sum() is not a built-in function, but implemented in my example.
 Otherwise, please go on with the next step you suggested.
+
+
+
+
+Please write a script in my new language TQL:
+* TQL is defined in /home/musial/private/Tanzen/TAS/DSL/TQL/TQL-Design.pdf
+* the script shall evaluate a dancing competition's final round according to the majority-and-skating system defined in German TSO -- see /home/musial/private/Tanzen/TAS/DSL/TQL/Anhang2.pdf
+* assume that the input and output tables marks and report have alrady been created (and filled in the case of marks) by the environment
+* please do not create any new tables via CREATE TABLE directive.
+** instead, just use temporary table objects returned by the SELECT function
+* please create information similar to the tables in Anhang2 in the report table
+* only fill-in report fields that shall be visible (i.e. not empty cells)
+* please use the report table also to read the single-dance results for the aggregated round evaluation
+* please create user-defined functions via FUNCTION at least for:
+** evaluation of a single dance, writing place-min, place-max and a place-value (i.e. (place_min + place_max) / 2) per start, using rules 5-8.
+** evaluation of the whole round using rules 9ff.
+* please do not mix up TQL with original SQL -- TQL is inspired by SQL, but several constructs are missing
+* in order to achieve JOINs for 1:n relations, please use one SELECT and one CONCAT-TO-construct to simulate a JOIN.
+* important: please ask back if your thinking starts to take unusually long!
+
