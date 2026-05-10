@@ -1,0 +1,13 @@
+# ===============================================
+# Implementation of cross-majority-skating scheme 
+# shortcut: cms
+# ===============================================
+
+
+import "tas-evaluation-interface.tql"
+
+
+FUNCTION cms_evaluate_dance(dance):
+
+    LET num_starts = SELECT COUNT(*) FROM marks GROUP BY start
+

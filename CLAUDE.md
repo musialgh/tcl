@@ -6,22 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A C# interpreter for **TCL** (Tanzen Competition Language) — a functional DSL for defining ballroom dance competition adjudication algorithms. The interpreter reads TCL script files (`.tcl`) and a JSON input, evaluates a named function, and writes the result as JSON to stdout.
 
-The three `.tcl` files at the repo root are the actual adjudication programs. The `interpreter/` directory contains the C# interpreter that runs them.
+The three `.tcl` files at the repo root are the actual adjudication programs. The `tcl` directory contains the C# interpreter that runs them.
 
 ## Build and run
 
 ```bash
 # Build (Release is the normal target)
-dotnet build interpreter/TclInterpreter.csproj -c Release
+dotnet build tclTclInterpreter.csproj -c Release
 
 # Run a function (auto-detects *.tcl in cwd)
-dotnet run --project interpreter/TclInterpreter.csproj -c Release -- \
+dotnet run --project tclTclInterpreter.csproj -c Release -- \
   <function_name> --input-file input.json
 
 # Explicit script loading (typical for tests)
-dotnet run --project interpreter/TclInterpreter.csproj -c Release -- \
+dotnet run --project tclTclInterpreter.csproj -c Release -- \
   wrap_round_final_skating \
-  --input-file interpreter/tests/test_final_round_tso_P_skating_in.json \
+  --input-file tcltests/test_final_round_tso_P_skating_in.json \
   --script adjudication.tcl \
   --script cross-majority-skating.tcl \
   --script cms-round-wrapper.tcl
@@ -37,16 +37,16 @@ dotnet run --project interpreter/TclInterpreter.csproj -c Release -- \
 
 ```bash
 # Run all integration tests (builds first, then runs each case)
-./interpreter/tests/run_tests.sh
+./tcltests/run_tests.sh
 
 # Run a single case manually
-dotnet run --project interpreter/TclInterpreter.csproj -c Release --no-build -- \
+dotnet run --project tclTclInterpreter.csproj -c Release --no-build -- \
   evaluate_dance_elimination \
-  --input-file interpreter/tests/test_elimination_dance_001_in.json \
+  --input-file tcltests/test_elimination_dance_001_in.json \
   --script adjudication.tcl --script cross-majority-skating.tcl
 ```
 
-Tests are `*_in.json` / `*_out.json` pairs in `interpreter/tests/`. They are registered by appending a pipe-delimited line to the `TESTS` array in `interpreter/tests/run_tests.sh`.
+Tests are `*_in.json` / `*_out.json` pairs in `tcltests/`. They are registered by appending a pipe-delimited line to the `TESTS` array in `tcltests/run_tests.sh`.
 
 ## Architecture
 

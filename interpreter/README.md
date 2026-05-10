@@ -5,7 +5,7 @@ A command-line C# interpreter for the TCL (Tanzen Competition Language) DSL for 
 ## Project Structure
 
 ```
-interpreter/
+tcl
 ├── src/                          # Source code
 │   ├── Lexer.cs                 # Tokenizer for DSL syntax
 │   ├── Parser.cs                # Recursive descent parser
@@ -122,7 +122,7 @@ tcl compute_places --input-file scores.json
 
 ## Testing
 
-Integration tests live in `interpreter/tests/` as paired JSON files and are driven
+Integration tests live in `tcltests/` as paired JSON files and are driven
 by a shell script at the repository root:
 
 ```bash
@@ -136,11 +136,11 @@ The script exits with code 0 if all tests pass, 1 otherwise.
 
 ### Adding a new test case
 
-1. Create the input and expected-output files in `interpreter/tests/`:
+1. Create the input and expected-output files in `tcltests/`:
 
    ```
-   interpreter/tests/test_<category>_<NNN>_in.json
-   interpreter/tests/test_<category>_<NNN>_out.json
+   tcltests/test_<category>_<NNN>_in.json
+   tcltests/test_<category>_<NNN>_out.json
    ```
 
    `<category>` identifies the function under test (e.g. `elimination`, `final`).
@@ -157,8 +157,8 @@ The script exits with code 0 if all tests pass, 1 otherwise.
 
    The three pipe-separated fields are:
    - **function name** — the DSL function to call (e.g. `evaluate_dance_elimination`)
-   - **input file** — filename inside `interpreter/tests/`
-   - **expected output file** — filename inside `interpreter/tests/`
+   - **input file** — filename inside `tcltests/`
+   - **expected output file** — filename inside `tcltests/`
 
 3. Run `./run_tests.sh` and verify the new case shows `OK`.
 

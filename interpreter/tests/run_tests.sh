@@ -8,7 +8,7 @@
 #      <function_name>  <input.json>  <expected_output.json>
 #
 #  Adding a test: just append a line to the TESTS array below and drop
-#  the corresponding *_in.json / *_out.json files into interpreter/tests/.
+#  the corresponding *_in.json / *_out.json files into tcltests/.
 # ============================================================================
 
 set -euo pipefail
@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR/../.."
-INTERPRETER_DIR="$REPO_ROOT/interpreter"
+INTERPRETER_DIR="$REPO_ROOTtcl"
 TEST_DIR="$INTERPRETER_DIR/tests"
 
 # ---------- test definitions --------------------------------------------------
