@@ -30,11 +30,34 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 ## Sprach-Features und Syntax
 
 **directive**:
-- `DEFINE <identifier>(<param-list>) AS <macro-body>`
-- `FUNCTION <identifier>({<param-name>[,]}*{[<param-name> = <default-value>][,]}*):`
+- `IMPORT <file-path>`
+  - macht alle in der genannten TQL-Datei definierten Funktionen sichtbar für nachfolgenden Code
+    - bis zum Ende des Funktionsrumpfs, in dem IMPORT steht, oder
+    - für den Rest der Datei, falls IMPORT außerhalb aller Funktionsrümpfe steht
+  - es wird empfohlen, `IMPORT` nur im *externen Code* am Beginn einer TQL-Datei zu verwenden
+- `EXECUTE <file-path>`
+  - bricht die Ausführung der aktuellen TQL-Datei ab und
+  - setzt die Ausführung mit dem Top-Level-Code in der TQL-Datei *file-path* fort
+  - alle globalen Variablen-Bindungen bleiben erhalten
+- `LOAD TABLE <table-name> FROM <csv-path>`
+  - lädt eine Tabelle aus einer CSV-Datei und macht sie als *table-name* immer *global* sichtbar
+  - Dateiformat siehe `SAVE-TABLE`
+- `SAVE TABLE <table-name> INTO <csv-path>`
+  - sichert eine einzelne Tabelle in eine CSV-Datei
+  - Ausgabe-Format:
+    - Trennzeichen `;`
+    - Strings (auch Spalten-Namen) sind in `" "` eingeschlossen
+    - zum String gehörende `"` sind als `\"` escaped
+    - erste Zeile enthält die Spaltennamen
+    - alle folgenden Zeilen enthalten jeweils eine Daten-Zeile
+- `FUNCTION <function-name>({<param-name>[,]}*{[<param-name> = <default-value>][,]}*):`
+  - definiert eine Benutzer-Funktion
   - Basis-Typen (DECIMAL, STRING, NULL) werden als Wert übergeben
   - alle Tabellen-Objekte werden als Referenz übergeben
     - eine Übergabe als Wert kann die Funktion simulieren, indem der Parameter mit LET in eine neue Variable kopiert wird
+- `CALL <function-name>({[param-name> = ]<param-value>[,]}*)`
+  - ruft benutzerdefinierte oder eingebaute Funktion *function-name* auf
+  - Rückgabewert wird ignoriert
 - `RETURN [<expression>]`
   - optional für Funktionen ohne Rückgabewert
   - ohne Rückgabewert liefert die Funktion NULL an den Aufrufer
@@ -63,6 +86,7 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
   - die erste Spalte einer Tabelle ist immer die einzige Primary-Key-Spalte
     - sie darf keine NULL-Werte enthalten
     - sie darf keine DEFAULT-Vereinbarung haben
+
 
 **table-expression**:
 - `SELECT {*|<select-expression [AS <column-name>][,]}+ FROM <table>`  
@@ -125,7 +149,8 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 - unäre Operatoren: `NOT`, `-`, `+`, `<value> IS [NOT] NULL`
 - binäre Operatoren: `=`, `<>`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `AND`, `OR`, `XOR`
 - `(<expression>)`
-- `<function-name>(<param-list>)`
+- `<function-name>({[param-name> = ]<param-value>[,]}*)`
+  - wertet benutzerdefinierte oder eingebaute Funktion *function-name* aus
 
 **select-expression** (zusätzliche Terme):
 - `<column-name>`
@@ -158,9 +183,6 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
   - äquivalent zu: `SELECT COUNT(*) FROM <table-expression>`
   - Ergebnis ist gleichzeitig der größte zulässige Index-Wert für *table-expression[i]*
 
-**file\_header**:
-- `IMPORT <file_path>`
-
 ## Lexikalische Struktur
 
 - Blöcke für Kontrollstrukturen (FUNCTION, FOR, WHEN, WHILE) werden durch Einrückung definiert (analog Python)
@@ -169,6 +191,18 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
   von keiner der Fortsetzungszeilen unterschritten wird
 - Text zwischen `#` und dem Zeilenende ist ein Kommentar
 - Tabellen- und Spalten-Namen können werden grundsätzlich ohne Anführungszeichen geschrieben, sie fungieren lexikalisch wie Bezeichner
+
+## Scopes und Ausführung
+
+- TQL-Code außerhalb aller Funktionsrümpfe heißt *externer Code* und wird ausgeführt
+  - beim Interpreter-Start für die aktuelle Datei, oder
+  - wenn die aktuelle Datei mit `EXECUTE` aufgerufen wurde
+- alle in *externem Code* mit `LET` definierten Variablen sind nach ihrer Definition global sichtbar 
+  - für *externen Code* unterhalb der Definition 
+  - für alle Funktionen nach der Definition aufgerufenen Funktionen
+    - inklusive solcher, die mit IMPORT importiert wurden
+- in Funktionsrümpfen mit `LET` definierte Variablen heißen *lokale Variablen* und sind sichtbar
+  - im definierenden Funktionsrumpf unterhalb der Definition
 
 ## Tabellen und Indizierung
 
