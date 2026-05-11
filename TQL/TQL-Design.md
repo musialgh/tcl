@@ -1,4 +1,4 @@
-# TQL (Arbeitstitel)
+# TQL Design
 
 TQL steht natürlich für _TAS Query Language_. Es handelt sich um eine _Domain Specific Language_ (DSL) für die Definition von
 - Wettkampf-Bewertungs- und Auswerte-Schemata (pro Rundenelement, Runde, Turnier)
