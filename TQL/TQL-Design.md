@@ -31,10 +31,13 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 
 **directive**:
 - `DEFINE <identifier>(<param-list>) AS <macro-body>`
-- `FUNCTION <identifier>[(<param-list>)]:`
+- `FUNCTION <identifier>({<param-name>[,]}*{[<param-name> = <default-value>][,]}*):`
   - Basis-Typen (DECIMAL, STRING, NULL) werden als Wert übergeben
   - alle Tabellen-Objekte werden als Referenz übergeben
     - eine Übergabe als Wert kann die Funktion simulieren, indem der Parameter mit LET in eine neue Variable kopiert wird
+- `RETURN [<expression>]`
+  - optional für Funktionen ohne Rückgabewert
+  - ohne Rückgabewert liefert die Funktion NULL an den Aufrufer
 - `LET <identifier> = <expression>`
 - `FOR <identifier> IN <limit>..<limit> {[ASC]|DESC}:`
 - `FOR <identifier> IN <table>:`
@@ -62,7 +65,11 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
     - sie darf keine DEFAULT-Vereinbarung haben
 
 **table-expression**:
-- `SELECT {*|<select-expression [AS <column-name>][,]}+ FROM <table> [WHERE <where-condition>] [ORDER BY <column-list> {[ASC]|DESC}] [GROUP BY <column-list> {[ASC]|DESC}] [LIMIT <numeric-expression> [ON DISTINCT <column-list>]]`
+- `SELECT {*|<select-expression [AS <column-name>][,]}+ FROM <table>`  
+  `[WHERE <where-condition>]`  
+  `[GROUP BY <column-list> {[ASC]|DESC}]`  
+  `[ORDER BY <column-list> {[ASC]|DESC}]`  
+  `[LIMIT <numeric-expression> [ON DISTINCT <column-list>]]`
   - liefert das Ergebnis als Tabellen-Objekt zurück
   - wenn die Key-Spalte der Tabelle (evtl. umbenannt) 1:1 zum Resultat gehört, dient sie als erste und Key-Spalte des Resultats
     - dies gilt auch, wenn sie im Resultat nicht ausdrücklich als erste Spalte aufgeführt ist
@@ -83,13 +90,14 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
   - wenn der Key der Ziel-Tabelle vom Typ GUID ist, werden die neuen Keys automatisch erzeugt, sofern die Quell-Tabelle keine Daten für die Key-Spalte enthält
   - liefert eine Tabellenspalte mit allen neuen Keys in der Ziel-Tabelle zurück
   - darf auch als Direktive genutzt werden
-- `({<column> = <expression>[,]}+)`
+- `ROW({[<column-name> = ]<expression>[,]}+)`
   - liefert eine Tabellenzeile mit den aufgeführten Spaltenname-Wert-Paaren zurück
+  - wenn *expression* ein einzelner Bezeichner ist und dem Spaltennamen entspricht, kann *column-name* entfallen
   - Datentypen werden automatisch übernommen
   - die erste Spalte ist die Key-Spalte (aus formalen Gründen)
   - DEFAULT für alle Spalten außer der Key-Spalte ist NULL
   - Hinweis: insbesondere nutzbar als _source-row_ in UPDATE … SET
-- `<table-expression>[<index>]`
+- `<table-expression>\[<index>\]`
   - liefert die indizierte Tabellen-Zeile
   - Index 0 liefert die Spaltennamen
   - Index-Bereich für die Daten-Zeilen ist 1..n
@@ -99,8 +107,13 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 
 **expression**:
 - `<table-expression>`
-  - wenn die resultierende Tabelle genau eine Spalte und eine Spalte enthält, kann dieser Ausdruck auch wie ein skalarer Wert verwendet werden
+  - wenn die resultierende Tabelle genau eine Spalte und eine Spalte enthält, wird das Resultat als ein skalarer Wert behandelt
+  - dies ist besonders zu beachten, wenn das Resultat später als Funktionsparameter verwendet wird
 - `NULL`
+- `FALSE`
+  - equal to 0
+- `TRUE`
+  - equal to 1
 - `<numeric-expression>`
 - `<string-pattern>`
   - in `" "` eingeschlossen
@@ -117,22 +130,15 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 **select-expression** (zusätzliche Terme):
 - `<column-name>`
 - `<group-function>`
-- `PLACE_MIN(<numeric-expression> [,{ASC|DESC}])`
-  - berechnet das Minimum des Von-bis-Bereichs an Plätzen, die sich ergeben, wenn
-    - die Plätze 1.._n_ anhand der Werte für alle _n_ Zeilen des Results vergeben werden, und zwar
-    - bessere Plätze für kleinere (ASC, default) bzw. größere (DESC) Werte, und
-    - m gleiche Werte für die Vergabe des Platzes k jeweils den Bereich \[k; k+m-1\] erhalten
-- `PLACE_MAX(<numeric-expression> [,{ASC|DESC}])`
-  - berechnet das Maximum des Von-bis-Bereichs an Plätzen, die sich ergeben, wenn
-    - die Plätze 1.._n_ anhand der Werte für alle _n_ Zeilen des Results vergeben werden, und zwar
-    - bessere Plätze für kleinere (ASC, default) bzw. größere (DESC) Werte, und
-    - m gleiche Werte für die Vergabe des Platzes k jeweils den Bereich \[k; k+m-1\] erhalten
 
 **where-condition** (zusätzliche Terme):
 - `<column-name> IN <column-expression>`
   - _column-expression_ muss ein Tabellen-Ausdruck mit genau einer Spalte sein
     - wird _nicht_ im Kontext der im SELECT verwendeten Tabelle ausgewertet
     - Spaltenname wird nicht beachtet
+- `VALUES MATCH <source-row>`
+  - liefert `TRUE`, wenn alle Spalten-Werte in *source-row* identisch sind mit den gleichnamigen Spalten 
+    der im SELECT verwendeten Tabelle
 - `<select-expression>`
 
 **group-function**:
@@ -143,12 +149,14 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 - `MIN(<select-expression>)`
 - `MAX(<select-expression>)`
 - `AVG(<select-expression>)`
-- `FIRST(<select-expression>)`
-- `LAST(<select-expression>)`
 - `MEDIAN(<select-expression>)`
 
 **builtin\_functions**:
 - `IF(<condition>,<expression-on-true>,<expression-on-false>)`
+- `ROWS(<table-expression>)`
+  - liefert die Anzahl echter Daten-Zeilen in *table-expression*
+  - äquivalent zu: `SELECT COUNT(*) FROM <table-expression>`
+  - Ergebnis ist gleichzeitig der größte zulässige Index-Wert für *table-expression[i]*
 
 **file\_header**:
 - `IMPORT <file_path>`
@@ -156,7 +164,9 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 ## Lexikalische Struktur
 
 - Blöcke für Kontrollstrukturen (FUNCTION, FOR, WHEN, WHILE) werden durch Einrückung definiert (analog Python)
-- Direktiven enden **nicht** mit einem Semikolon!
+- jede Direktive endet mit einem Semikolon
+- jede Direktive kann sich über mehrere Zeilen erstrecken, sofern die Einrückung am Beginn der Direktive
+  von keiner der Fortsetzungszeilen unterschritten wird
 - Text zwischen `#` und dem Zeilenende ist ein Kommentar
 - Tabellen- und Spalten-Namen können werden grundsätzlich ohne Anführungszeichen geschrieben, sie fungieren lexikalisch wie Bezeichner
 

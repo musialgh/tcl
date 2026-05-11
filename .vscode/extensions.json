@@ -1,0 +1,10 @@
+{
+  // TQL language support (local LSP server — not on the marketplace).
+  // One-time setup from the repo root:
+  //
+  //   ln -s "$(pwd)/TQL/lsp/vscode-extension" ~/.vscode/extensions/tql-lsp
+  //   cd TQL/lsp/vscode-extension && npm install
+  //
+  // Then restart VSCode. The server is started automatically when you open a .tql file.
+  "recommendations": []
+}

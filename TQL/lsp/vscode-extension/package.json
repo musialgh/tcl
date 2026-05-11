@@ -1,0 +1,29 @@
+{
+  "name": "tql-lsp",
+  "displayName": "TQL Language Support",
+  "description": "Completion and hover for .tql files via the project-local LSP server.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": { "vscode": "^1.82.0" },
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "tql",
+        "aliases": ["TQL"],
+        "extensions": [".tql"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tql",
+        "scopeName": "source.tql",
+        "path": "./syntaxes/tql.tmLanguage.json"
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

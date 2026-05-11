@@ -1,0 +1,84 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TQL",
+  "scopeName": "source.tql",
+  "patterns": [
+    { "include": "#comment"          },
+    { "include": "#string-double"    },
+    { "include": "#string-single"    },
+    { "include": "#number"           },
+    { "include": "#function-builtin" },
+    { "include": "#type"             },
+    { "include": "#keyword-control"  },
+    { "include": "#keyword-sql"      },
+    { "include": "#keyword-operator" },
+    { "include": "#constant"         }
+  ],
+  "repository": {
+
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.tql"
+    },
+
+    "string-double": {
+      "name": "string.quoted.double.tql",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "match": "\\\\[{}\"\\\\]",
+          "name": "constant.character.escape.tql" },
+        { "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.tql" } },
+          "endCaptures":   { "0": { "name": "punctuation.section.interpolation.end.tql"   } },
+          "name": "meta.interpolation.tql" }
+      ]
+    },
+
+    "string-single": {
+      "name": "string.quoted.single.tql",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        { "match": "\\\\'", "name": "constant.character.escape.tql" }
+      ]
+    },
+
+    "number": {
+      "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b",
+      "name": "constant.numeric.tql"
+    },
+
+    "function-builtin": {
+      "match": "\\b(?:IF|SUM|COUNT|MIN|MAX|AVG|FIRST|LAST|MEDIAN|PLACE_MIN|PLACE_MAX)(?=\\s*\\()",
+      "name": "support.function.builtin.tql"
+    },
+
+    "type": {
+      "match": "\\b(?:DECIMAL|TEXT|GUID|STRING)\\b",
+      "name": "storage.type.tql"
+    },
+
+    "keyword-control": {
+      "match": "\\b(?:DEFINE|FUNCTION|LET|FOR|IN|WHILE|BREAK|CONTINUE|IF|ELSE|IMPORT)\\b",
+      "name": "keyword.control.tql"
+    },
+
+    "keyword-sql": {
+      "match": "\\b(?:SELECT|FROM|WHERE|ORDER|BY|GROUP|LIMIT|ON|AS|SET|INTO|VALUES|USING|UPDATE|CONCAT|TO|CREATE|DROP|ADD|INSERT|TABLE|COLUMN|DISTINCT|DEFAULT|EXISTS)\\b",
+      "name": "keyword.other.tql"
+    },
+
+    "keyword-operator": {
+      "match": "\\b(?:AND|OR|XOR|NOT|IS|ASC|DESC)\\b",
+      "name": "keyword.operator.tql"
+    },
+
+    "constant": {
+      "match": "\\bNULL\\b",
+      "name": "constant.language.tql"
+    }
+
+  }
+}
