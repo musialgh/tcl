@@ -16,5 +16,11 @@
   ],
   "indentationRules": {
     "increaseIndentPattern": ":[ \\t]*(#.*)?$"
-  }
+  },
+  "onEnterRules": [
+    {
+      "beforeText": ":[ \\t]*(#.*)?$",
+      "action": { "indent": "indent" }
+    }
+  ]
 }
