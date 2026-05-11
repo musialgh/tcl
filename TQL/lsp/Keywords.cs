@@ -23,6 +23,14 @@ static class Keywords
 
         ["BREAK"] = "**BREAK** — exits the enclosing `FOR` or `WHILE` loop immediately.",
 
+        ["CALL"] = """
+            **CALL**
+            ```
+            CALL <function-name>([<param-value> | <param-name> = <param-value> [,]]*)
+            ```
+            Calls a built-in or user-defined function and discards the return value.
+            """,
+
         ["BY"] = "**BY** — part of `ORDER BY` and `GROUP BY`.",
 
         ["COLUMN"] = "**COLUMN** — part of `ADD COLUMN`.",
@@ -56,14 +64,6 @@ static class Keywords
 
         ["DEFAULT"] = "**DEFAULT `<value>`** — default column value in `ADD COLUMN`. Not allowed on the primary key.",
 
-        ["DEFINE"] = """
-            **DEFINE**
-            ```
-            DEFINE <identifier>(<param-list>) AS <macro-body>
-            ```
-            Defines a textual macro (substituted at parse time).
-            """,
-
         ["DESC"] = "**DESC** — descending order. Used in `ORDER BY`, `GROUP BY`, and `FOR … IN range`.",
 
         ["DISTINCT"] = "**DISTINCT** — part of `LIMIT … ON DISTINCT <cols>`. Counts blocks of consecutive equal values instead of individual rows.",
@@ -74,6 +74,15 @@ static class Keywords
             DROP TABLE <name> [IF NOT EXISTS]
             ```
             Drops (deletes) a table.
+            """,
+
+        ["EXECUTE"] = """
+            **EXECUTE**
+            ```
+            EXECUTE <file-path>
+            ```
+            Stops execution of the current TQL file and continues with the top-level code in *file-path*.
+            All global variable bindings are preserved.
             """,
 
         ["ELSE"] = """
@@ -88,6 +97,8 @@ static class Keywords
             ```
             Optional fallback branch of an `IF` block.
             """,
+
+        ["FALSE"] = "**FALSE** — boolean literal, equal to `0`.",
 
         ["FIRST"] = "**FIRST(`<expr>`)** — aggregate: first value in the group.",
 
@@ -139,7 +150,9 @@ static class Keywords
             ```
             IMPORT <file-path>
             ```
-            Includes another TQL file (file header directive).
+            Makes all functions defined in *file-path* visible to subsequent code.
+            - Inside a function body: visible until the end of that body.
+            - At file level (recommended): visible for the rest of the file.
             """,
 
         ["IN"] = """
@@ -164,6 +177,15 @@ static class Keywords
         ["IS"] = "**IS [NOT] NULL** — null test: `<expr> IS NULL` / `<expr> IS NOT NULL`.",
 
         ["LAST"] = "**LAST(`<expr>`)** — aggregate: last value in the group.",
+
+        ["LOAD"] = """
+            **LOAD TABLE**
+            ```
+            LOAD TABLE <table-name> FROM <csv-path>
+            ```
+            Loads a table from a CSV file and makes it globally visible as *table-name*.
+            See `SAVE TABLE` for the file format.
+            """,
 
         ["LET"] = """
             **LET**
@@ -191,6 +213,34 @@ static class Keywords
         ["NOT"] = "**NOT** — logical negation: `NOT <expr>` or `<expr> IS NOT NULL`.",
 
         ["NULL"] = "**NULL** — null value literal. Test with `IS NULL` / `IS NOT NULL`.",
+
+        ["RETURN"] = """
+            **RETURN**
+            ```
+            RETURN [<expression>]
+            ```
+            Returns a value from a function. Without an expression, returns `NULL` to the caller.
+            Optional when no return value is needed.
+            """,
+
+        ["ROW"] = """
+            **ROW(`<col> = <expr> [,]…`)**
+            ```
+            ROW([<column-name> = ]<expression> [,]…)
+            ```
+            Constructs a single table row from column-value pairs.
+            - If *expression* is an identifier matching the column name, `column-name =` may be omitted.
+            - The first column is the key column (formally required).
+            - Unspecified columns default to `NULL`.
+            Typically used as *source-row* in `UPDATE … SET`.
+            """,
+
+        ["ROWS"] = """
+            **ROWS(`<table-expr>`)**
+            Returns the number of data rows in *table-expr*.
+            Equivalent to `SELECT COUNT(*) FROM <table-expr>`.
+            Also the largest valid index for `table-expr[i]`.
+            """,
 
         ["ON"] = "**ON** — part of `LIMIT … ON DISTINCT`.",
 
@@ -230,6 +280,15 @@ static class Keywords
         ["SET"] = "**SET `<source-row>`** — new values in `UPDATE … SET`. The source must resolve to exactly one row.",
 
         ["STRING"] = "**STRING** — string parameter type in `FUNCTION` declarations (passed by value).",
+
+        ["SAVE"] = """
+            **SAVE TABLE**
+            ```
+            SAVE TABLE <table-name> INTO <csv-path>
+            ```
+            Saves a table to a CSV file.
+            Format: `;`-delimited, strings (including column names) in `" "`, `\"` for embedded quotes, header row first.
+            """,
 
         ["SUM"] = "**SUM(`<expr>`)** — aggregate: sum of values.",
 
@@ -275,6 +334,8 @@ static class Keywords
             ```
             Repeats the indented block while the condition is true. Supports `BREAK` and `CONTINUE`.
             """,
+
+        ["TRUE"] = "**TRUE** — boolean literal, equal to `1`.",
 
         ["XOR"] = "**XOR** — logical exclusive or: `<expr> XOR <expr>`.",
     };

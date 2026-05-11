@@ -51,7 +51,7 @@
     },
 
     "function-builtin": {
-      "match": "\\b(?:IF|SUM|COUNT|MIN|MAX|AVG|FIRST|LAST|MEDIAN|PLACE_MIN|PLACE_MAX)(?=\\s*\\()",
+      "match": "\\b(?:IF|SUM|COUNT|MIN|MAX|AVG|FIRST|LAST|MEDIAN|PLACE_MIN|PLACE_MAX|ROWS|ROW)(?=\\s*\\()",
       "name": "support.function.builtin.tql"
     },
 
@@ -61,12 +61,12 @@
     },
 
     "keyword-control": {
-      "match": "\\b(?:DEFINE|FUNCTION|LET|FOR|IN|WHILE|BREAK|CONTINUE|IF|ELSE|IMPORT)\\b",
+      "match": "\\b(?:FUNCTION|LET|FOR|IN|WHILE|BREAK|CONTINUE|IF|ELSE|IMPORT|EXECUTE|CALL|RETURN)\\b",
       "name": "keyword.control.tql"
     },
 
     "keyword-sql": {
-      "match": "\\b(?:SELECT|FROM|WHERE|ORDER|BY|GROUP|LIMIT|ON|AS|SET|INTO|VALUES|USING|UPDATE|CONCAT|TO|CREATE|DROP|ADD|INSERT|TABLE|COLUMN|DISTINCT|DEFAULT|EXISTS)\\b",
+      "match": "\\b(?:SELECT|FROM|WHERE|ORDER|BY|GROUP|LIMIT|ON|AS|SET|INTO|VALUES|USING|UPDATE|CONCAT|TO|CREATE|DROP|ADD|INSERT|TABLE|COLUMN|DISTINCT|DEFAULT|EXISTS|LOAD|SAVE)\\b",
       "name": "keyword.other.tql"
     },
 
@@ -76,7 +76,7 @@
     },
 
     "constant": {
-      "match": "\\bNULL\\b",
+      "match": "\\b(?:NULL|TRUE|FALSE)\\b",
       "name": "constant.language.tql"
     }
 
