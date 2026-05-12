@@ -76,20 +76,19 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
 - `ELSE:`
 - `UPDATE <target-table> FROM <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur Änderung von Werten
-  - Wert der Ziel-Key-Spalte (erste Spalte) in *source-table* wählt die zu ändernden Zeilen
-  - eine Quell-Zeile ohne Key-Match in der Ziel-Tabelle führt zum Abbruch
+  - Wert der ersten Spalte von *source-table* wählt die zu ändernden Zeilen über die erste Spalte der *target-table*
+  - eine Quell-Zeile ohne Match in der Ziel-Tabelle führt zum Abbruch
   - wenn es mehr als einen Match pro Quell-Zeile gibt, werden *alle* davon betroffenen Ziel-Zeilen geändert
 - `CONCAT TO <target-table> FROM <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur neue Spalten
-  - Wert der Ziel-Key-Spalte (obligatorisch) wählt die zu ändernden Zeilen
-  - Hinweis: mit CONCAT TO können die meisten Use-Cases von JOIN in Standard-SQL gelöst werden
+  - Wert der ersten Spalte von *source-table* wählt die zu ändernden Zeilen über die erste Spalte der *target-table*
+  - eine Quell-Zeile ohne Match in der Ziel-Tabelle führt zum Abbruch
+  - wenn es mehr als einen Match pro Quell-Zeile gibt, werden *alle* davon betroffenen Ziel-Zeilen geändert
+  - Hinweis: mit CONCAT TO können die meisten verbleibenden Use-Cases von JOIN in Standard-SQL gelöst werden
 - `CREATE TABLE <table-name> [IF NOT EXISTS]`
 - `DROP TABLE <table-name> [IF NOT EXISTS]`
-- `ADD COLUMN <column-name> {DECIMAL|TEXT|GUID} [DEFAULT <value>] TO TABLE <table> [IF NOT EXISTS]`
-  - die erste Spalte einer Tabelle ist immer die einzige Primary-Key-Spalte
-    - sie darf keine NULL-Werte enthalten
-    - sie darf keine DEFAULT-Vereinbarung haben
-
+- `ADD COLUMN <column-name> {GUID|{DECIMAL|TEXT} [DEFAULT <value>]} TO TABLE <table> [IF NOT EXISTS]`
+  - Spalten vom Typ GUID in einer neuen Zeile werden automatisch mit einer zufälligen ID versehen
 
 **table-expression**:
 - `SELECT {*|<select-expression [AS <column-name>][,]}+ FROM <table>`  
@@ -98,31 +97,24 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   `[ORDER BY <column-list> {[ASC]|DESC}]`  
   `[LIMIT <numeric-expression> [ON DISTINCT <column-list>]]`
   - liefert das Ergebnis als Tabellen-Objekt zurück
-  - wenn die Key-Spalte der Tabelle (evtl. umbenannt) 1:1 zum Resultat gehört, dient sie als erste und Key-Spalte des Resultats
-    - dies gilt auch, wenn sie im Resultat nicht ausdrücklich als erste Spalte aufgeführt ist
-  - anderenfalls wird die erstgenannte Spalte des Resultats zur Key-Spalte
-    - dazu muss natürlich der Key-Index neu aufgebaut werden
   - LIMIT … ON DISTINCT zählt die Blöcke mit aufeinanderfolgendem gleichem Wert anstelle von allen Zeilen
     - muss i.d.R. zusammen mit ORDER BY verwendet werden
 - `UPDATE <target-table> [WHERE <where-condition>] SET <source-row> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur Änderung von Werten
   - *source-row* muss ein Tabellenausdruck mit genau einer Zeile sein
-  - Wert der Ziel-Key-Spalte wird ignoriert, falls er in *source-row* vorkommt
   - wenn WHERE fehlt, werden alle Zeilen der Ziel-Tabelle geändert
-  - liefert eine Tabellenspalte mit den Keys aller gematchten Zeilen der Ziel-Tabelle zurück (egal, ob die neuen Spaltenwerte sich von den alten unterscheiden)
+  - liefert die erste Spalte der Ziel-Tabelle zurück, reduziert auf alle von WHERE selektierten Zeilen 
+    (egal, ob die neuen Spaltenwerte sich von den alten unterscheiden)
   - darf auch als Direktive genutzt werden
 - `INSERT INTO <target-table> VALUES <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur neue Zeilen
-  - Key-Duplikation führt zum Abbruch
-  - wenn der Key der Ziel-Tabelle vom Typ GUID ist, werden die neuen Keys automatisch erzeugt, sofern die Quell-Tabelle keine Daten für die Key-Spalte enthält
-  - liefert eine Tabellenspalte mit allen neuen Keys in der Ziel-Tabelle zurück
+  - liefert eine Tabellenspalte mit der Spalte der Ziel-Tabelle für alle neuen Zeilen zurück
   - darf auch als Direktive genutzt werden
 - `ROW({[<column-name> = ]<expression>[,]}+)`
   - liefert eine Tabellenzeile mit den aufgeführten Spaltenname-Wert-Paaren zurück
   - wenn *expression* ein einzelner Bezeichner ist und dem Spaltennamen entspricht, kann *column-name* entfallen
   - Datentypen werden automatisch übernommen
-  - die erste Spalte ist die Key-Spalte (aus formalen Gründen)
-  - DEFAULT für alle Spalten außer der Key-Spalte ist NULL
+  - DEFAULT für alle Spalten außer vom Typ GUID ist NULL
   - Hinweis: insbesondere nutzbar als *source-row* in UPDATE … SET
 - `<table-expression>\[<index>\]`
   - liefert die indizierte Tabellen-Zeile
@@ -130,7 +122,6 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   - Index-Bereich für die Daten-Zeilen ist 1..n
 - `<table-expression>.<column-name>`
   - liefert die ganze selektierte Spalte
-  - stellt (aus formalen Gründen) die Key-Spalte des Resultats dar
 
 **expression**:
 - `<table-expression>`
@@ -191,7 +182,7 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   - Ergebnis ist gleichzeitig der größte zulässige Index-Wert für *table-expression[i]*
   - `GUID()`
     - erzeugt eine zufällige Id
-    - kann zur Anlage eines eindeutigen Schlüssels dienen, wenn ein SELECT-Ergebnis keine eindeuten Key-Werte liefert (Fehlerfall!)
+    - kann zur Anlage eines eindeutigen Schlüssels in einer neuen Tabellenzeile dienen
 
 ## Lexikalische Struktur
 
@@ -222,18 +213,16 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   - Die internen Tabellen können erzeugt werden
     - von der Umgebung vor dem Skript-Aufruf, und/oder
     - vom TQL-Skript via *table-expression*.
-- Eine Tabelle mit mindestens einer Spalte verwendet immer die erste Spalte als eindeutigen Primärschlüssel (a.k.a. PRIMARY-KEY aus SQL). Über den Key werden
-  - die Zeilen-Assoziationen in den Direktiven UPDATE … FROM und CONCAT TO … FROM gesteuert, und
-  - die Auswertung von WHERE-Bedingungen optimiert.
 
 ## Implementierungsvorschlag für Tabellen-Objekte
 
 ```ts
 Table = (
-    column_list : SortedDict<column_name : String,   column_index : Int             > ; 
-    row_order   : SortedDict<row_index   : Int,      key_value    : TqlValue        > ;
-    rows        : SortedDict<key_value   : TqlValue, row          : Vector<TqlValue>> ;
-    defaults    : Vector<TqlValue>                                                    ;
+    column_list  :        SortedDict<column_name : String,   column_index : Int                   > ; 
+    indices      : Vector<SortedDict<cell_value  : TqlValue, row_indices  : Set<Int>>             > ;
+    sort_order   :        SortedDict<view_index  : Int,      row_index    : Int                   > ;
+    rows         :        SortedDict<row_index   : Int,      row          : Vector<TqlValue>      > ;
+    defaults     :        Vector<TqlValue>                                                          ;
 )
 ```
 
@@ -241,13 +230,14 @@ Table = (
 
 - *column\_list* erlaubt schnellen Zugriff auf Spalten per Name
   - Enumeration nach Spalten-Index wird kaum benötigt (nur Debugging + Ausgabe)
-- Zugriffe auf Zeilen via Key nutzen *rows* und sind am schnellsten
-  - häufigste Art des Zugriffs
-- die optionale Sortierung von Zeilen unabhängig von der Key-Spalte wird separat in *row\_order* abgelegt
+- Zugriffe auf Zeilen über Daten nutzen *indices*
+  - jeder Datenwert liefert eine Teilmente *row_indices* physischer Zeilen
+  - unterstützt schnelle Schnittmengenbildung bei Mehrfach-Filterung (z.B. WHERE-Bedingungen)
+- die optionale Sortierung von Zeilen unabhängig von den Indices wird separat in *sort\_order* abgelegt
   - für SELECT … ORDER BY technisch erforderlich
-  - beschleunigt den Zugriff via Index (`[]`-Operator)
+  - kann leer sein (default) und wird dann als 1:1-Mapping interpretiert
 - Zeilen sind als Vector modelliert:
-  - schließt auch die Werte der Key-Spalte ein – technisch redundant, aber spart Fallunterscheidungen in der Implementierung
   - Spalten werden kaum jemals zugefügt => höherer Aufwand ok
   - Vektoren können ggf. mit Reserve-Kapazität angelegt werden, da sie vermutlich nur Referenzen auf *TqlValue*-Objekte enthalten
+  - Redundanz Schlüssel zu Daten via Referenzen und Reference Counting addressierbar
 - Ablage der DEFAULT-Werte in *defaults* ist kompatibel zum Ablageformat der Zeilen => Initialisierung per Zuweisung möglich
