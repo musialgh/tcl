@@ -9,6 +9,7 @@ FUNCTION prepare_interface():
     # generate marks table [IN]
     DROP   TABLE marks IF NOT EXISTS
     CREATE TABLE marks
+    ADD COLUMN id                   GUID                    TO TABLE marks
     ADD COLUMN start                DECIMAL                 TO TABLE marks
     ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE marks
     ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE marks
