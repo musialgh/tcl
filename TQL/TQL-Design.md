@@ -231,7 +231,7 @@ Table = (
 - *column\_list* erlaubt schnellen Zugriff auf Spalten per Name
   - Enumeration nach Spalten-Index wird kaum benötigt (nur Debugging + Ausgabe)
 - Zugriffe auf Zeilen über Daten nutzen *indices*
-  - jeder Datenwert liefert eine Teilmente *row_indices* physischer Zeilen
+  - jeder Datenwert liefert eine Teilmenge *row_indices* physischer Zeilen
   - unterstützt schnelle Schnittmengenbildung bei Mehrfach-Filterung (z.B. WHERE-Bedingungen)
 - die optionale Sortierung von Zeilen unabhängig von den Indices wird separat in *sort\_order* abgelegt
   - für SELECT … ORDER BY technisch erforderlich

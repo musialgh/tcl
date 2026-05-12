@@ -256,5 +256,3 @@ FUNTION report_sum(round, dance, place, candidates):
         IF NOT SELECT COUNT(*) FROM report WHERE VALUES MATCH row:
             INSERT INTO report VALUES row;
 # report_sum()
-
-
