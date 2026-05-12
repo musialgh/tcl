@@ -26,8 +26,8 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
         
         FOR by_place IN 1 .. ROWS(starts): # place where counts and sums are read from (decreasing priotity)
 
-            # fetch best-count occurrences together with sum for placing <by_place>
-            LET candidates = SELECT start, COUNT(*) AS num, SUM(*) AS sum FROM dance_marks 
+            # fetch count and sum for placing <by_place>
+            LET candidates = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM dance_marks 
                                 WHERE start IN candidates.start AND value <= by_place GROUP BY start;
             # suppress sub-majority results (note: TSO also reports sub-majority counts -- but we don't like that!)
             LET candidates = SELECT * FROM candidates WHERE 2 * num > ROWS(jury);
@@ -39,7 +39,7 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
             # try to resolve on count
             IF  ROWS(candidates) = 1:
                 CALL assign_place(unplaced, candidates.start, round, dance, for_place, for_place,
-                                    "Rules 5,6,8: highest majority count={candidates.num} on place {by_place}");
+                                    "Rules 5,6,8: highest majority count {candidates.num} on place {by_place}");
                 LET candidates = SELECT * FROM candidates WHERE FALSE;
 
             # report sums considered
@@ -49,14 +49,14 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
             # try to resolve on sum
             IF  ROWS(candidates) = 1:
                 CALL assign_place(unplaced, candidates.start, round, dance, for_place, for_place,
-                                    "Rules 7a,b: majority count={candidates.num} "
-                                    "with highest sum={candidates.sum} on place {by_place}");
+                                    "Rules 7a,b: majority count {candidates.num} "
+                                    "with highest sum {candidates.sum} on place {by_place}");
                 LET candidates = SELECT * FROM candidates WHERE FALSE;
 
         # criterions exhausted: share place for remaining candidates
         FOR c IN candidates:
                 CALL assign_place(unplaced, c.start, round, dance, for_place, for_place + ROWS(candidates) - 1, 
-                                    "Rule 7c: shared highest majority count={c.num}, sum={c.sum} on place {by_place}");
+                                    "Rule 7c: shared highest majority count {c.num}, sum {c.sum} on place {by_place}");
             
 # evaluate_dance_final()
 
@@ -67,13 +67,13 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
 FUNCTION evaluate_round_final(round, do_skating = FALSE):
 
     # extract current round from marks for readability
-    LET final_round = SELECT id, start, round_element AS dance, adjudicator, value FROM marks 
+    LET final_marks = SELECT id, start, round_element AS dance, adjudicator, value FROM marks 
                         WHERE marks.round = round;
 
     # define some helpers for shorter notation below
-    LET starts      = SELECT start                  FROM final_round GROUP BY start;
-    LET jury        = SELECT adjudicator AS judge   FROM final_round GROUP BY judge;
-    LET dances      = SELECT round_element AS dance FROM final_round GROUP BY dance;
+    LET starts      = SELECT start                  FROM final_marks GROUP BY start;
+    LET jury        = SELECT adjudicator AS judge   FROM final_marks GROUP BY judge;
+    LET dances      = SELECT round_element AS dance FROM final_marks GROUP BY dance;
 
     # evaluate all dances
     FOR dance IN dances: CALL evaluate_dance_final(starts, jury, round, dance);
@@ -114,34 +114,87 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
 # \param unplaced   [inout] : table (start, sum): all yet unplaced starts, for updating
 # \param tie           [in] : table (start, sum): current tie group, subset of <unplaced>
 # \param round         [in] : round id
+# \param final_marks   [in] : marks subset for current final round
 # \param for-place     [in] : place to be assigned next
-FUNCTION perform_skating(unplaced, tie, round, for_place):
+FUNCTION perform_skating(unplaced, marks, tie, round, final_marks, for_place):
+
+    # define some helpers to avoid more function arguments
+    LET starts      = SELECT start                  FROM final_marks GROUP BY start;
+    LET jury        = SELECT adjudicator AS judge   FROM final_marks GROUP BY judge;
+    LET dances      = SELECT round_element AS dance FROM final_marks GROUP BY dance;
 
     LET candidates = tie; # prevent output
 
-    # report r10 application (candidates, for_place)
-    # compute r10 data count,sum
-    # report r10 data (candidates, for_place, count)
-    # candidates = r10-top (candidates, count)
-    # rows=1 => assign, done
-    # report r10 data (candidates, for_place, sum)
-    # candidates = r10-top (candidates, sum)
-    # rows=1 => assign, done
+    # report r10 application
+    LET apply_r10 = SELECT start, round, "R10-applied" AS group, for_place AS subgroup, 
+                           "Rule 9b: sum {sum} tie on place {for_place}" AS reason FROM candidates;
+    INSERT INTO report VALUES apply_r10;
+    # fetch counts and sums better or equal target place
+    LET candidates = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM report
+                        WHERE report.round = round AND round_element IS NOT NULL AND key = "place_val" 
+                                AND value <= for_place
+                        GROUP BY start;
+ 
+    # report counts considered
+    CALL report_count(candidates, round, dance = NULL, group = "R10-criteria", by_place, 
+                        "Rules 10a,b for place {for_place}";
+    # fetch best-count occurrences among candidates
+    LET candidates = SELECT * FROM candidates ORDER BY num DESC LIMIT 1 ON DISTINCT num;
+    # try to resolve on count
+    IF  ROWS(candidates) = 1:
+        CALL assign_place(unplaced, candidates.start, round, dance = NULL, for_place, for_place,
+                            "Rules 10a,b: highest count {candidates.num} on place {for_place}");
+        RETURN;
+
+    # report sums considered
+    CALL report_sum(candidates, round, dance = NULL, group = "R10-criteria", by_place, 
+                        "Rules 10c,d for place {for_place}";
+    # fetch best-sum occurrences among candidates
+    LET candidates = SELECT * FROM candidates ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
+    # try to resolve on sum
+    IF  ROWS(candidates) = 1:
+        CALL assign_place(unplaced, candidates.start, round, dance = NULL, for_place, for_place,
+                            "Rules 10c,d: lowest sum {candidates.sum} on place {for_place}");
+        RETURN;
+
+    # report r11 application
+    LET apply_r11 = SELECT start, round, "R11-applied" AS group, for_place AS subgroup, 
+                           "Rule 10e: sum {sum} tie on place {for_place}" AS reason FROM candidates;
+    INSERT INTO report VALUES apply_r11;
     
-    # report r11 application (candidates, for_place)
-    # by_place in for_place .. #starts
-        # compute r11 data count,sum (by_place)
-        # restrict to majority
+    FOR by_place IN for_place .. ROWS(starts)
+        # fetch counts and sums 
+        LET candidates = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM final_marks
+                            WHERE start IN candidates.start AND value <= by_place GROUP BY start;
+        # suppress sub-majority results (note: TSO also reports sub-majority counts -- but we don't like that!)
+        LET candidates = SELECT * FROM candidates WHERE 2 * num > ROWS(jury) * ROWS(dances);
+
         # report counts considered by R11
-        CALL report_count(candidates, round, dance = NULL, group = "R11", by_place, "Rules 11,5,6 for place {by_place}");
-        # candidates = r11-top (candidates, count)
-        # rows=1 => assign, done
+        CALL report_count(candidates, round, dance = NULL, group = "R11-criteria", by_place, 
+                            "Rules 11,5,6 for place {by_place}");
+        # fetch best-count occurrences among candidates
+        LET candidates = SELECT * FROM candidates ORDER BY num DESC LIMIT 1 ON DISTINCT num;
+        # try to resolve on count
+        IF  ROWS(candidates) = 1:
+            CALL assign_place(unplaced, candidates.start, round, dance = NULL, for_place, for_place,
+                                "Rules 11,5,6: highest count {candidates.num} on place {for_place}");
+            RETURN;
+                
         # report sums considered by R11
-        CALL report_sum(candidates, round, dance = NULL, group = "R11", by_place, "Rules 11,7 for place {by_place}");
-        # candidates = r11-top (candidates, sum)
-        # rows=1 => assign, done
+        CALL report_count(candidates, round, dance = NULL, group = "R11-criteria", by_place, 
+                            "Rules 11,7 for place {by_place}");
+        # fetch best-count occurrences among candidates
+        LET candidates = SELECT * FROM candidates ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
+        # try to resolve on count
+        IF  ROWS(candidates) = 1:
+            CALL assign_place(unplaced, candidates.start, round, dance = NULL, for_place, for_place,
+                                "Rules 11,7: lowest sum {candidates.sum} on place {for_place}");
+            RETURN;
         
-    # share place among candidates
+    # share place among remaining candidates
+    FOR c IN candidates:
+        CALL assign_place(unplaced, c.start, round, dance = NULL, for_place, for_place + ROWS(candidates) - 1,
+                         "Rules 11,7c: sharing place {for_place} due to same counts and sums for this place and lower");
 
 # perform_skating()
 
