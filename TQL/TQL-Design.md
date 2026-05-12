@@ -1,28 +1,28 @@
 # TQL Design
 
-TQL steht natürlich für _TAS Query Language_. Es handelt sich um eine _Domain Specific Language_ (DSL) für die Definition von
+TQL steht natürlich für *TAS Query Language_. Es handelt sich um eine *Domain Specific Language* (DSL) für die Definition von
 - Wettkampf-Bewertungs- und Auswerte-Schemata (pro Rundenelement, Runde, Turnier)
 - Bildungsregeln für Runden und Folge-Turniere (inkl. Klassifikationsrunden oder "Sieger tanzt mit")
 - Regeln für die Ergebnisberichte (**TBD**: TQL-Nutzung sinnvoll?)
 
 ## TAS-Interface
 
-Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung_ für _beliebige_ Wettkampfarten.
+Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung* für *beliebige* Wettkampfarten.
 
 **Design-Kriterium**: *Wenn sich sowohl das Skating-System als auch eine Fußball-WM damit modellieren lassen, sind wir für zukünftige Anforderungen aus dem Tanzsport gut aufgestellt.*
 
 ### Eingabe
 
 - Tabelle **marks** (<u>start</u>, round, round\_element, adjudicator\_group, adjudicator, value DECIMAL)
-- als _start_ kann (muss aber nicht) die Startnummer verwendet werden
+- als *start* kann (muss aber nicht) die Startnummer verwendet werden
 
 ### Ausgabe
 
 - Tabelle **report** (<u>guid</u>, start, group TEXT, subgroup TEXT, subsubgroup TEXT, key TEXT, value DECIMAL, reason TEXT)
   - enthält das Endergebnis
   - enthält alle Daten, aus denen Report-Generatoren Auswertungs-Berichte erstellen sollen
-  - _reason_ dient optional zur Herstellung einer Traceability für den entsprechenden Wert (bzgl. Regeln und/oder verwendeter Eingabe-Daten)
-- _report_ enthält mindestens
+  - *reason* dient optional zur Herstellung einer Traceability für den entsprechenden Wert (bzgl. Regeln und/oder verwendeter Eingabe-Daten)
+- *report* enthält mindestens
   - einen ungruppierten key "_place-min_" pro Start, und
   - einen ungruppierten key "_place-max_" pro Start,
   - um das Endergebnis in Form eines Platz-von- bis Platz-bis-Bereichs darzustellen
@@ -72,10 +72,11 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 - `IF <condition>:`
 - `ELSE IF <condition>:`
 - `ELSE:`
-- `UPDATE <table> FROM <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
+- `UPDATE <target-table> FROM <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur Änderung von Werten
-  - Wert der Ziel-Key-Spalte (obligatorisch) wählt die zu ändernden Zeilen
+  - Wert der Ziel-Key-Spalte (erste Spalte) in *source-table* wählt die zu ändernden Zeilen
   - eine Quell-Zeile ohne Key-Match in der Ziel-Tabelle führt zum Abbruch
+  - wenn es mehr als einen Match pro Quell-Zeile gibt, werden *alle* davon betroffenen Ziel-Zeilen geändert
 - `CONCAT TO <target-table> FROM <source-table> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur neue Spalten
   - Wert der Ziel-Key-Spalte (obligatorisch) wählt die zu ändernden Zeilen
@@ -103,8 +104,8 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
     - muss i.d.R. zusammen mit ORDER BY verwendet werden
 - `UPDATE <target-table> [WHERE <where-condition>] SET <source-row> [USING {<source-column> [AS <target-column>][,]}+]`
   - nur Änderung von Werten
-  - _source-row_ muss ein Tabellenausdruck mit genau einer Zeile sein
-  - Wert der Ziel-Key-Spalte wird ignoriert, falls er in _source-row_ vorkommt
+  - *source-row* muss ein Tabellenausdruck mit genau einer Zeile sein
+  - Wert der Ziel-Key-Spalte wird ignoriert, falls er in *source-row* vorkommt
   - wenn WHERE fehlt, werden alle Zeilen der Ziel-Tabelle geändert
   - liefert eine Tabellenspalte mit den Keys aller gematchten Zeilen der Ziel-Tabelle zurück (egal, ob die neuen Spaltenwerte sich von den alten unterscheiden)
   - darf auch als Direktive genutzt werden
@@ -120,7 +121,7 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
   - Datentypen werden automatisch übernommen
   - die erste Spalte ist die Key-Spalte (aus formalen Gründen)
   - DEFAULT für alle Spalten außer der Key-Spalte ist NULL
-  - Hinweis: insbesondere nutzbar als _source-row_ in UPDATE … SET
+  - Hinweis: insbesondere nutzbar als *source-row* in UPDATE … SET
 - `<table-expression>\[<index>\]`
   - liefert die indizierte Tabellen-Zeile
   - Index 0 liefert die Spaltennamen
@@ -158,8 +159,8 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 
 **where-condition** (zusätzliche Terme):
 - `<column-name> IN <column-expression>`
-  - _column-expression_ muss ein Tabellen-Ausdruck mit genau einer Spalte sein
-    - wird _nicht_ im Kontext der im SELECT verwendeten Tabelle ausgewertet
+  - *column-expression* muss ein Tabellen-Ausdruck mit genau einer Spalte sein
+    - wird *nicht* im Kontext der im SELECT verwendeten Tabelle ausgewertet
     - Spaltenname wird nicht beachtet
 - `VALUES MATCH <source-row>`
   - liefert `TRUE`, wenn alle Spalten-Werte in *source-row* identisch sind mit den gleichnamigen Spalten 
@@ -207,11 +208,11 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die _Bewertung
 ## Tabellen und Indizierung
 
 - TQL arbeitet nur auf internen Tabellen-Objekten:
-  - Die Anbindung an die Backend-Datenbank erfolgt _nur_ vor und _nach_ der Ausführung ein oder mehrerer TQL-Skripte, nicht _während_ dieser Ausführung.
+  - Die Anbindung an die Backend-Datenbank erfolgt *nur* vor und *nach* der Ausführung ein oder mehrerer TQL-Skripte, nicht *während* dieser Ausführung.
   - Dadurch wird die Backend-Datenbank nicht inkonsistent, wenn TQL durch einen Fehler abbricht (implizite **Transaktions-Semantik**).
   - Die internen Tabellen können erzeugt werden
     - von der Umgebung vor dem Skript-Aufruf, und/oder
-    - vom TQL-Skript via _table-expression_.
+    - vom TQL-Skript via *table-expression*.
 - Eine Tabelle mit mindestens einer Spalte verwendet immer die erste Spalte als eindeutigen Primärschlüssel (a.k.a. PRIMARY-KEY aus SQL). Über den Key werden
   - die Zeilen-Assoziationen in den Direktiven UPDATE … FROM und CONCAT TO … FROM gesteuert, und
   - die Auswertung von WHERE-Bedingungen optimiert.
@@ -229,14 +230,15 @@ Table = (
 
 ### Rationale
 
-- _column\_list_ erlaubt schnellen Zugriff auf Spalten per Name
+- *column\_list* erlaubt schnellen Zugriff auf Spalten per Name
   - Enumeration nach Spalten-Index wird kaum benötigt (nur Debugging + Ausgabe)
-- Zugriffe auf Zeilen via Key nutzen _rows_ und sind am schnellsten
+- Zugriffe auf Zeilen via Key nutzen *rows* und sind am schnellsten
   - häufigste Art des Zugriffs
-- die optionale Sortierung von Zeilen unabhängig von der Key-Spalte wird separat in _row\_order_ abgelegt
-  - nur für SELECT … ORDER BY technisch erforderlich
+- die optionale Sortierung von Zeilen unabhängig von der Key-Spalte wird separat in *row\_order* abgelegt
+  - für SELECT … ORDER BY technisch erforderlich
+  - beschleunigt den Zugriff via Index (`[]`-Operator)
 - Zeilen sind als Vector modelliert:
   - schließt auch die Werte der Key-Spalte ein – technisch redundant, aber spart Fallunterscheidungen in der Implementierung
   - Spalten werden kaum jemals zugefügt => höherer Aufwand ok
-  - Vektoren können ggf. mit Reserve-Kapazität angelegt werden, da sie vermutlich nur Referenzen auf _TqlValue_-Objekte enthalten
-- Ablage der DEFAULT-Werte in _defaults_ ist kompatibel zum Ablageformat der Zeilen => Initialisierung per Zuweisung möglich
+  - Vektoren können ggf. mit Reserve-Kapazität angelegt werden, da sie vermutlich nur Referenzen auf *TqlValue*-Objekte enthalten
+- Ablage der DEFAULT-Werte in *defaults* ist kompatibel zum Ablageformat der Zeilen => Initialisierung per Zuweisung möglich

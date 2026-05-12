@@ -8,17 +8,17 @@ IMPORT "tas-evaluation-interface.tql";
 
 
 # Evaluate one dance in a final
-# \param starts     [inout] : table (start, places_sum) with all starts -- places_sum is output
-# \param jury          [in] : table (judge) with all adjudicators
-# \param round         [in] : key of round to evaluate
-# \param dance         [in] : key of dance to evaluate
+# \param starts     [in] : table (start) with all starts 
+# \param jury       [in] : table (judge) with all adjudicators
+# \param round      [in] : key of round to evaluate
+# \param dance      [in] : key of dance to evaluate
 FUNCTION evaluate_dance_final(starts, jury, round, dance):
 
     # extract current dance from marks for readability
     LET dance_marks = SELECT id, start, adjudicator, value FROM marks 
                         WHERE marks.round = round AND round_element = dance;
 
-    LET unplaced = starts.start; # will be reduced on every place assignment
+    LET unplaced = starts; # will be reduced on every place assignment
     WHILE ROWS(unplaced):
     
         LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
@@ -38,7 +38,7 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
             CALL report_count(round, dance, by_place, candidates);
             # try to resolve on count
             IF  ROWS(candidates) = 1:
-                CALL assign_place(unplaced, starts, candidates.start, round, dance, for_place, for_place,
+                CALL assign_place(unplaced, candidates.start, round, dance, for_place, for_place,
                                     "Rules 5,6,8: highest majority count={candidates.num} on place {by_place}");
                 LET candidates = SELECT * FROM candidates WHERE FALSE;
 
@@ -48,14 +48,14 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
             CALL report_sum(round, dance, by_place, candidates);
             # try to resolve on sum
             IF  ROWS(candidates) = 1:
-                CALL assign_place(unplaced, starts, candidates.start, round, dance, for_place, for_place,
+                CALL assign_place(unplaced, candidates.start, round, dance, for_place, for_place,
                                     "Rules 7a,b: majority count={candidates.num} "
                                     "with highest sum={candidates.sum} on place {by_place}");
                 LET candidates = SELECT * FROM candidates WHERE FALSE;
 
         # criterions exhausted: share place for remaining candidates
         FOR c IN candidates:
-                CALL assign_place(unplaced, starts, c.start, round, dance, for_place, for_place + ROWS(candidates) - 1, 
+                CALL assign_place(unplaced, c.start, round, dance, for_place, for_place + ROWS(candidates) - 1, 
                                     "Rule 7c: shared highest majority count={c.num}, sum={c.sum} on place {by_place}");
             
 # evaluate_dance_final()
@@ -71,18 +71,19 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
                         WHERE marks.round = round;
 
     # define some helpers for shorter notation below
+    LET starts      = SELECT start                  FROM final_round GROUP BY start;
     LET jury        = SELECT adjudicator AS judge   FROM final_round GROUP BY judge;
     LET dances      = SELECT round_element AS dance FROM final_round GROUP BY dance;
 
     # evaluate all dances
-    FOR dance IN dances: 
-        LET starts  = SELECT start, 0 AS places_sum FROM final_round GROUP BY start;
-        CALL evaluate_dance_final(starts, jury, round, dance);
-        # forward places_sum reported by evaluate_dance_final() into report
-        LET places_sums = SELECT start, round AS round, "places_sum" AS key, places_sum AS value, 
-                                "Rule 9a: sum of places over {ROWS(dances)} dances" AS reason 
-                            FROM starts;
-        INSERT INTO report VALUES places_sums;
+    FOR dance IN dances: CALL evaluate_dance_final(starts, jury, round, dance);
+
+    # compute places sum over dances and add to report
+    LET places_sums = SELECT start, round, "places_sum" AS key, SUM(value) AS value, 
+                            "Rule 9a: sum of places over {ROWS(dances)} dances" AS reason FROM report
+                        WHERE report.round = round AND round_element IS NOT NULL AND key = "place_val"
+                        GROUP BY start;
+    INSERT INTO report VALUES places_sums;
 
     LET unplaced = starts; # will be reduced on every place assignment
     WHILE ROWS(unplaced):
@@ -101,10 +102,6 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
         IF  ROWS(candidates) > 1 AND do_skating:
             # invoke skating on tie
 
-            
-
-        
-
 
     
 
@@ -115,26 +112,22 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
 
 
 # Process a single or shared palce assigment
-# \param unplaced   [inout] : remaining unplaced starts, to be reduced by <start>
-# \param starts     [inout] : table (start, places_sum) -- places_sum is updated
+# \param unplaced  [in,out] : remaining unplaced starts, to be reduced by <start>
 # \param start         [in] : start id
 # \param round         [in] : round id
 # \param dance         [in] : dance id
 # \param place_min     [in] : start value of assigned place range
 # \param place_max     [in] : end value of assigned place range
 # \param reason        [in] : textual description of assignment rationale
-FUNCTION assign_place(unplaced, starts, start, round, dance, place_min, place_max, reason = NULL):
-    LET place_val = (place_min + place_max) / 2;
+FUNCTION assign_place(unplaced, start, round, dance, place_min, place_max, reason = NULL):
     # add placing to report (3 entries)
     INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_min', value = place_min, reason);
     INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_max', value = place_max, reason);
-    INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_val', value = place_val, 
-                                    reason = IF(place_min = place_max, NULL, "Rule 7d: average of {place_min}..{place_max}"));
+    INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_val', 
+                                    value = (place_min + place_max) / 2, 
+                                    reason = IF(place_min = place_max, NULL, "Rule 7d: average of {place-min}..{place_max}"));
     # drop start we just assigned (call by reference)
     LET unplaced = SELECT * FROM unplaced WHERE unplaced.start <> start;
-    # update place sum output for start
-    LET new_sum = SELECT places_sum + place_val FROM starts WHERE starts.start = start;
-    UPDATE starts WHERE starts.start = start SET ROW(places_sum = new_sum);
 # assign_place()
 
 
