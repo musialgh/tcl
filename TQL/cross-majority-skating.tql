@@ -85,49 +85,85 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
                         GROUP BY start;
     INSERT INTO report VALUES places_sums;
 
-    LET unplaced = starts; # will be reduced on every place assignment
+    LET unplaced = places_sums; # will be reduced on every place assignment
     WHILE ROWS(unplaced):
     
         LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
-        LET candidates = SELECT start, places_sum AS sum FROM unplaced 
+        LET candidates = SELECT start, value AS sum FROM unplaced 
                                 ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
 
         # try to resolve on sum only
-        IF  ROWS(candidates) = 1:
-            CALL assign_place_finale(unplaced, candidates.start, round, for_place, for_place,
-                                    "Rule 9b: lowest sum of places over {ROWS(dances)} dances");
-            CONTINUE;
-        IF  ROWS(candidates) > 1 AND NOT do_skating:
-            # share places
-        IF  ROWS(candidates) > 1 AND do_skating:
-            # invoke skating on tie
-
-
-    
+        ELSE IF ROWS(candidates) = 1:
+            CALL assign_place(unplaced, candidates.start, round, dance = NULL, for_place, for_place,
+                              "Rule 9a: lowest sum {candidates.sum} of places over {ROWS(dances)} dances");
+        ELSE IF ROWS(candidates) > 1 AND NOT do_skating:
+            FOR c IN candidates:
+                CALL assign_place(unplaced, c.start, round, dance = NULL, for_place, for_place + ROWS(candidates) - 1,
+                                  "No skating: shared lowest sum {c.sum} of places over {ROWS(dances)} dances");
+        # apply skating if configured
+        ELSE IF  ROWS(candidates) > 1 AND do_skating:
+            CALL perform_skating(unplaced, candidates, round, for_place);
+        # cannot/should not/will not happen, but would deadlock
+        ELSE: ABORT "internal error: <candidates> empty";
 
 # evaluate_round_final_skating()
+
+
+# Apply skating rules 10, 11 to given tie group.
+# \param unplaced   [inout] : table (start, sum): all yet unplaced starts, for updating
+# \param tie           [in] : table (start, sum): current tie group, subset of <unplaced>
+# \param round         [in] : round id
+# \param for-place     [in] : place to be assigned next
+FUNCTION perform_skating(unplaced, tie, round, for_place):
+
+    LET candidates = tie; # prevent output
+
+    # report r10 application (candidates, for_place)
+    # compute r10 data count,sum
+    # report r10 data (candidates, for_place, count)
+    # candidates = r10-top (candidates, count)
+    # rows=1 => assign, done
+    # report r10 data (candidates, for_place, sum)
+    # candidates = r10-top (candidates, sum)
+    # rows=1 => assign, done
+    
+    # report r11 application (candidates, for_place)
+    # by_place in for_place .. #starts
+        # compute r11 data count,sum (by_place)
+        # report r11 data (candidates, by_place, count)
+        # candidates = r11-top (candidates, count)
+        # rows=1 => assign, done
+        # report r11 data (candidates, by_place, sum)
+        # candidates = r11-top (candidates, sum)
+        # rows=1 => assign, done
+        
+    # share place among candidates
+
+# perform_skating()
 
 
 # ================================== Helpers ==================================
 
 
-# Process a single or shared palce assigment
-# \param unplaced  [in,out] : remaining unplaced starts, to be reduced by <start>
+# Process a single or shared place assigment for a dance *or* round 
+# \param unplaced   [inout] : remaining tie group, table (start, ...)
 # \param start         [in] : start id
 # \param round         [in] : round id
-# \param dance         [in] : dance id
+# \param dance         [in] : dance id (if NULL, treat as round place assignment)
 # \param place_min     [in] : start value of assigned place range
 # \param place_max     [in] : end value of assigned place range
 # \param reason        [in] : textual description of assignment rationale
 FUNCTION assign_place(unplaced, start, round, dance, place_min, place_max, reason = NULL):
-    # add placing to report (3 entries)
+    # drop start we just assigned (call by reference)
+    LET unplaced = SELECT * FROM unplaced WHERE unplaced.start <> start;
+    # add placing to report
     INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_min', value = place_min, reason);
     INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_max', value = place_max, reason);
+    # only for dance evaluation, we also need a place value for aggregation
+    IF dance IS NULL: RETURN
     INSERT INTO report VALUES ROW(start, round, round_element = dance, key = 'place_val', 
                                     value = (place_min + place_max) / 2, 
                                     reason = IF(place_min = place_max, NULL, "Rule 7d: average of {place-min}..{place_max}"));
-    # drop start we just assigned (call by reference)
-    LET unplaced = SELECT * FROM unplaced WHERE unplaced.start <> start;
 # assign_place()
 
 

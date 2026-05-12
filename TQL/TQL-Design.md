@@ -61,6 +61,8 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
 - `RETURN [<expression>]`
   - optional für Funktionen ohne Rückgabewert
   - ohne Rückgabewert liefert die Funktion NULL an den Aufrufer
+- `ABORT <error-message>`
+  - bricht den TQL-Interpreter wegen eines internen/unbehebbaren Fehlers ab
 - `LET <identifier> = <expression>`
 - `FOR <identifier> IN <limit>..<limit> {[ASC]|DESC}:`
 - `FOR <identifier> IN <table>:`
@@ -144,9 +146,13 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   - in `" "` eingeschlossen
   - Muster der Form `{<expression>}` werden durch den Wert des Ausdrucks ersetzt
   - geschweifte Klammern und doppelte Anführungszeichen müssen escaped werden: `\{`, `\}`, `\"`
+  - aufeinanderfolgende *string-pattern*'s werden automatisch konkateniert
+    - für Verteilung auf mehrere Code-Zeilen
 - `<string>`
   - in `' '` eingeschlossen
   - einfache Anführungszeichen müssen escaped werden: `\'`
+  - aufeinanderfolgende *string*'s werden automatisch konkateniert
+    - für Verteilung auf mehrere Code-Zeilen
 - unäre Operatoren: `NOT`, `-`, `+`, `<value> IS [NOT] NULL`
 - binäre Operatoren: `=`, `<>`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `AND`, `OR`, `XOR`
 - `(<expression>)`
@@ -183,6 +189,9 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
   - liefert die Anzahl echter Daten-Zeilen in *table-expression*
   - äquivalent zu: `SELECT COUNT(*) FROM <table-expression>`
   - Ergebnis ist gleichzeitig der größte zulässige Index-Wert für *table-expression[i]*
+  - `GUID()`
+    - erzeugt eine zufällige Id
+    - kann zur Anlage eines eindeutigen Schlüssels dienen, wenn ein SELECT-Ergebnis keine eindeuten Key-Werte liefert (Fehlerfall!)
 
 ## Lexikalische Struktur
 
