@@ -1,6 +1,5 @@
 # ===============================================
 # Implementation of cross-majority-skating scheme 
-# shortcut: cms
 # ===============================================
 
 
@@ -234,7 +233,6 @@ FUNCTION assign_place(unplaced, start, round, dance, place_min, place_max, reaso
 FUNTION report_count(round, dance = NULL, group = NULL, place, candidates, reason = NULL):
     FOR c IN candidates:
         row = ROW(c.start, round, round_element = dance, group, subgroup = place, key = 'count', value = c.num, reason);
-                        # reason = "Rules 5,6 for place {place}");
         # we must "manually" check if entry already exists (no suitable indexing)
         IF NOT SELECT COUNT(*) FROM report WHERE VALUES MATCH row:
             INSERT INTO report VALUES row;
@@ -251,7 +249,6 @@ FUNTION report_count(round, dance = NULL, group = NULL, place, candidates, reaso
 FUNTION report_sum(round, dance, place, candidates):
     FOR c IN candidates:
         row = ROW(c.start, round, round_element = dance, group, subgroup = place, key = 'sum', value = c.sum, reason);
-                       # reason = "Rule 7 for place {place}");
         # we must "manually" check if entry already exists (no suitable indexing)
         IF NOT SELECT COUNT(*) FROM report WHERE VALUES MATCH row:
             INSERT INTO report VALUES row;
