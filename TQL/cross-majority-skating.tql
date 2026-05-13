@@ -6,6 +6,42 @@
 IMPORT "tas-evaluation-interface.tql";
 
 
+# Evaluate elimination round (crosses)
+# \param round      [in] : key of round to evaluate
+FUNCTION evaluate_round_elimination(round):
+
+    # extract current round from marks for readability
+    LET round_marks = SELECT start, round_element AS dance, adjudicator, value FROM marks 
+                        WHERE marks.round = round;
+
+    # compute number of crosses per dance
+    LET dance_counts = SELECT start, round, dance AS round_element, 'marks' AS key, COUNT(value) AS value,
+                                 "F 6.8.1: count of marks" AS reason
+                        FROM round_marks GROUP BY start, dance;
+    INSERT INTO report VALUES dance_counts;
+
+    # compute total number of crosses
+    LET total_counts = SELECT start, round, 'marks' AS key, SUM(value) AS value,
+                                "F 6.8.1: count of marks" AS reason
+                        FROM dance_counts GROUP BY start;
+    INSERT INTO report VALUES total_counts;
+
+    # generate placing
+    FOR s IN total_counts:
+        LET placing = SELECT                  1 + COUNT(value < s.value) AS place_min,
+                             ROWS(total_counts) - COUNT(value > s.value) AS place_max 
+                        FROM total_counts;
+        IF placing.place_min = placing.place_max:
+            LET reason = "F 6.8.1: single rank {placing.place_min} in count of marks";
+        ELSE:
+            LET reason = "F 6.8.1: shared rank {placing.place_min}..{placing.place_max} in count of marks";
+        INSERT INTO report VALUES
+            ROW(start, round, 'place_min' AS key, placing.place_min AS value, reason),
+            ROW(start, round, 'place_max' AS key, placing.place_max AS value, reason);
+
+# evaluate_round_elimination()
+
+
 # Evaluate one dance in a final
 # \param starts     [in] : table (start) with all starts 
 # \param jury       [in] : table (judge) with all adjudicators
@@ -14,7 +50,7 @@ IMPORT "tas-evaluation-interface.tql";
 FUNCTION evaluate_dance_final(starts, jury, round, dance):
 
     # extract current dance from marks for readability
-    LET dance_marks = SELECT id, start, adjudicator, value FROM marks 
+    LET dance_marks = SELECT start, adjudicator, value FROM marks 
                         WHERE marks.round = round AND round_element = dance;
 
     LET unplaced = starts; # will be reduced on every place assignment
@@ -66,7 +102,7 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
 FUNCTION evaluate_round_final(round, do_skating = FALSE):
 
     # extract current round from marks for readability
-    LET final_marks = SELECT id, start, round_element AS dance, adjudicator, value FROM marks 
+    LET final_marks = SELECT start, round_element AS dance, adjudicator, value FROM marks 
                         WHERE marks.round = round;
 
     # define some helpers for shorter notation below
@@ -102,7 +138,14 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
                                   "No skating: shared lowest sum {c.sum} of places over {ROWS(dances)} dances");
         # apply skating if configured
         ELSE IF  ROWS(candidates) > 1 AND do_skating:
-            CALL perform_skating(unplaced, candidates, round, for_place);
+            CALL perform_skating(unplaced       = unplaced, 
+                                 tie            = candidates, 
+                                 starts         = starts,
+                                 jury           = jury, 
+                                 round          = round, 
+                                 dances         = dances, 
+                                 final_marks    = final_marks,
+                                 for_place      = for_place);
         # cannot/should not/will not happen, but would deadlock
         ELSE: ABORT "internal error: <candidates> empty";
 
@@ -110,19 +153,17 @@ FUNCTION evaluate_round_final(round, do_skating = FALSE):
 
 
 # Apply skating rules 10, 11 to given tie group.
-# \param unplaced   [inout] : table (start, sum): all yet unplaced starts, for updating
+# \param unplaced   [inout] : table (start, sum): all yet unplaced starts, for reducing
 # \param tie           [in] : table (start, sum): current tie group, subset of <unplaced>
+# \param starts        [in] : table (start) with all starts 
+# \param jury          [in] : table (judge) with all adjudicators
 # \param round         [in] : round id
+# \param dances        [in] : table (dance) with all dances
 # \param final_marks   [in] : marks subset for current final round
 # \param for-place     [in] : place to be assigned next
-FUNCTION perform_skating(unplaced, marks, tie, round, final_marks, for_place):
+FUNCTION perform_skating(unplaced, tie, starts, jury, round, dances, final_marks, for_place):
 
-    # define some helpers to avoid more function arguments
-    LET starts      = SELECT start                  FROM final_marks GROUP BY start;
-    LET jury        = SELECT adjudicator AS judge   FROM final_marks GROUP BY judge;
-    LET dances      = SELECT round_element AS dance FROM final_marks GROUP BY dance;
-
-    LET candidates = tie; # prevent output
+    LET candidates = tie; # enforce [in] semantics while reducing <candidates>
 
     # report r10 application
     LET apply_r10 = SELECT start, round, "R10-applied" AS group, for_place AS subgroup, 

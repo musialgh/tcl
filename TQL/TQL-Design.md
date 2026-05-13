@@ -1,31 +1,46 @@
-# TQL Design
-
 TQL steht natürlich für *TAS Query Language_. Es handelt sich um eine *Domain Specific Language* (DSL) für die Definition von
-- Wettkampf-Bewertungs- und Auswerte-Schemata (pro Rundenelement, Runde, Turnier)
+- Wettbewerbs-Bewertungs- und Auswerte-Schemata (pro Rundenelement, Runde, Turnier)
 - Bildungsregeln für Runden und Folge-Turniere (inkl. Klassifikationsrunden oder "Sieger tanzt mit")
 - Regeln für die Ergebnisberichte (**TBD**: TQL-Nutzung sinnvoll?)
 
-## TAS-Interface
-
-Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung* für *beliebige* Wettkampfarten.
-
 **Design-Kriterium**: *Wenn sich sowohl das Skating-System als auch eine Fußball-WM damit modellieren lassen, sind wir für zukünftige Anforderungen aus dem Tanzsport gut aufgestellt.*
 
-### Eingabe
+# TAS-Interface
 
-- Tabelle **marks** (<u>start</u>, round, round\_element, adjudicator\_group, adjudicator, value DECIMAL)
-- als *start* kann (muss aber nicht) die Startnummer verwendet werden
+TQL ist grundsätzlich eine touringmächtige Programmiersprache, die *alle* erfindbaren Berechnungsaufgaben lösen kann. Das TAS-Interface definiert erst den eigentlich *domänen-spezifischen* Aspekt in Form  der Anbindung von TQL an TAS. Es handlet sich im Kern um zwei Tabellen mit einer vereinbarter Struktur, die *beliebige* Wettbewerbsarten unterstützt.
 
-### Ausgabe
+## Eingabe
 
-- Tabelle **report** (<u>guid</u>, start, group TEXT, subgroup TEXT, subsubgroup TEXT, key TEXT, value DECIMAL, reason TEXT)
+- Tabelle **marks** (start, round, round\_element, adjudicator\_group, adjudicator, value DECIMAL)
+  - als *start* kann (muss aber nicht) die Startnummer verwendet werden
+- variable **round** 
+
+## Ausgabe
+
+- Tabelle **report** (start, round, round_element, group TEXT, subgroup TEXT, subsubgroup TEXT, key TEXT, value DECIMAL, reason TEXT)
   - enthält das Endergebnis
   - enthält alle Daten, aus denen Report-Generatoren Auswertungs-Berichte erstellen sollen
   - *reason* dient optional zur Herstellung einer Traceability für den entsprechenden Wert (bzgl. Regeln und/oder verwendeter Eingabe-Daten)
 - *report* enthält mindestens
-  - einen ungruppierten key "_place-min_" pro Start, und
-  - einen ungruppierten key "_place-max_" pro Start,
+  - einen ansonsten ungruppierten key "*place-min*" pro *start* und *round*, und
+  - einen ansonsten ungruppierten key "*place-max*" pro *start* und *round*,
   - um das Endergebnis in Form eines Platz-von- bis Platz-bis-Bereichs darzustellen
+
+## Ablauf
+
+  - TAS stellt die Eingabe-Objekte im globalen Scope zur Verfügung
+  - TAS startet das TQL-Skript, das in der Konfiguration der Wettbewerbsart und den aktuellen Rundentyp vorgesehen ist:
+    - Aufruf als globaler Code, also noch keine benutzerdefineirte Funktion ausgewählt
+    - analog zu EXECUTE
+  - Das aufgerufe Skript kann:
+    - Funktionsbibliotheken mit IMPORT einbeziehen, und
+    - benutzerdefinierte Funktionen aufrufen, die dort oder im Skript selbst definiert sind
+  
+# Sprachdefinition TQL
+
+Hier eine semi-formale Sprachdefinition von TQL,
+- als Dokumentation und
+- zur Nutzung in AI-Prompts.
 
 ## Sprach-Features und Syntax
 
@@ -195,14 +210,14 @@ Zwei Tabellen mit vereinbarter Struktur bilden das Interface für die *Bewertung
 
 ## Scopes und Ausführung
 
-- TQL-Code außerhalb aller Funktionsrümpfe heißt *externer Code* und wird ausgeführt
+- TQL-Code außerhalb aller Funktionsrümpfe heißt *globaler Code* und wird ausgeführt
   - beim Interpreter-Start für die aktuelle Datei, oder
   - wenn die aktuelle Datei mit `EXECUTE` aufgerufen wurde
-- alle in *externem Code* mit `LET` definierten Variablen sind nach ihrer Definition global sichtbar 
-  - für *externen Code* unterhalb der Definition 
+- alle in *globalen Code* mit `LET` definierten Variablen sind nach ihrer Definition sichtbar (**globaler Scope**)
+  - für *globalen Code* unterhalb der Definition 
   - für alle Funktionen nach der Definition aufgerufenen Funktionen
     - inklusive solcher, die mit IMPORT importiert wurden
-- in Funktionsrümpfen mit `LET` definierte Variablen heißen *lokale Variablen* und sind sichtbar
+- in Funktionsrümpfen mit `LET` definierte Variablen heißen *lokale Variablen* und sind sichtbar (**lokaler Scope**)
   - im definierenden Funktionsrumpf unterhalb der Definition
 
 ## Tabellen und Indizierung

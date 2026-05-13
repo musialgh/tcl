@@ -7,31 +7,29 @@
 FUNCTION prepare_interface():
 
     # generate marks table [IN]
-    DROP   TABLE marks IF NOT EXISTS
-    CREATE TABLE marks
-    ADD COLUMN id                   GUID                    TO TABLE marks
-    ADD COLUMN start                DECIMAL                 TO TABLE marks
-    ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE marks
-    ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE marks
-    ADD COLUMN adjudicator_group    TEXT    DEFAULT NULL    TO TABLE marks
-    ADD COLUMN adjudicator          TEXT    DEFAULT NULL    TO TABLE marks
-    ADD COLUMN value                DECIMAL                 TO TABLE marks
+    DROP   TABLE marks IF NOT EXISTS;
+    CREATE TABLE marks;
+    ADD COLUMN start                DECIMAL                 TO TABLE marks;
+    ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE marks;
+    ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE marks;
+    ADD COLUMN adjudicator_group    TEXT    DEFAULT NULL    TO TABLE marks;
+    ADD COLUMN adjudicator          TEXT    DEFAULT NULL    TO TABLE marks;
+    ADD COLUMN value                DECIMAL                 TO TABLE marks;
 
     # generate report table [OUT]
-    DROP   TABLE report IF EXISTS
-    CREATE TABLE report
-    ADD COLUMN id                   GUID                    TO TABLE report
-    ADD COLUMN start                DECIMAL                 TO TABLE report
+    DROP   TABLE report IF EXISTS;
+    CREATE TABLE report;
+    ADD COLUMN start                DECIMAL                 TO TABLE report;
     # the following columns are optional hierarchical (group-)keys    
-    ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE report
-    ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE report
-    ADD COLUMN group                TEXT    DEFAULT NULL    TO TABLE report
-    ADD COLUMN subgroup             TEXT    DEFAULT NULL    TO TABLE report
-    ADD COLUMN subsubgroup          TEXT    DEFAULT NULL    TO TABLE report
-    ADD COLUMN key                  TEXT                    TO TABLE report
+    ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE report;
+    ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE report;
+    ADD COLUMN group                TEXT    DEFAULT NULL    TO TABLE report;
+    ADD COLUMN subgroup             TEXT    DEFAULT NULL    TO TABLE report;
+    ADD COLUMN subsubgroup          TEXT    DEFAULT NULL    TO TABLE report;
+    ADD COLUMN key                  TEXT                    TO TABLE report;
     # keys end
-    ADD COLUMN value                DECIMAL                 TO TABLE report
-    ADD COLUMN reason               TEXT    DEFAULT NULL    TO TABLE report
+    ADD COLUMN value                DECIMAL                 TO TABLE report;
+    ADD COLUMN reason               TEXT    DEFAULT NULL    TO TABLE report;
 
 # prepare_interface()
 
