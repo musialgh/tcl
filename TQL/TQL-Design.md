@@ -13,7 +13,9 @@ TQL ist grundsätzlich eine touringmächtige Programmiersprache, die *alle* erfi
 
 - Tabelle **marks** (start, round, round\_element, adjudicator\_group, adjudicator, value DECIMAL)
   - als *start* kann (muss aber nicht) die Startnummer verwendet werden
-- variable **round** 
+- Variable **round** enthält den Schlüssel für die aktuelle Runde
+  - **TBD**: brauchen wir ggf. alle Runden, oder kann das Interface auf die aktuelle Runde beschränkt werden 
+    und auf *round* als Eingabe somit verzichten?
 
 ## Ausgabe
 
