@@ -7,7 +7,7 @@ TQL steht natürlich für *TAS Query Language_. Es handelt sich um eine *Domain 
 
 # TAS-Interface
 
-TQL ist grundsätzlich eine touringmächtige Programmiersprache, die *alle* erfindbaren Berechnungsaufgaben lösen kann. Das TAS-Interface definiert erst den eigentlich *domänen-spezifischen* Aspekt in Form  der Anbindung von TQL an TAS. Es handlet sich im Kern um zwei Tabellen mit einer vereinbarter Struktur, die *beliebige* Wettbewerbsarten unterstützt.
+TQL ist grundsätzlich eine [touringmächtige](https://de.wikipedia.org/wiki/Turing-Vollst%C3%A4ndigkeit) Programmiersprache, die *alle* erfindbaren Berechnungsaufgaben lösen kann. Das TAS-Interface definiert erst den eigentlich *domänen-spezifischen* Aspekt in Form  der Anbindung von TQL an TAS. Es handlet sich im Kern um zwei Tabellen mit einer vereinbarter Struktur, die *beliebige* Wettbewerbsarten unterstützt.
 
 ## Eingabe
 
