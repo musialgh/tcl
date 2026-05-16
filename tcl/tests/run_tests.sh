@@ -16,8 +16,8 @@ set -euo pipefail
 # ---------- locate directories ------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/../.."
-INTERPRETER_DIR="$REPO_ROOTtcl"
+REPO_ROOT="${SCRIPT_DIR}/../.."
+INTERPRETER_DIR="${REPO_ROOT}/tcl"
 TEST_DIR="$INTERPRETER_DIR/tests"
 
 # ---------- test definitions --------------------------------------------------
@@ -64,9 +64,9 @@ for entry in "${TESTS[@]}"; do
     -c Release --no-build -- \
     "$func" \
     --input-file "$input_path" \
-    --script "$REPO_ROOT/adjudication.tcl" \
-    --script "$REPO_ROOT/cross-majority-skating.tcl" \
-    --script "$REPO_ROOT/cms-round-wrapper.tcl" \
+    --script "$INTERPRETER_DIR/adjudication.tcl" \
+    --script "$INTERPRETER_DIR/cross-majority-skating.tcl" \
+    --script "$INTERPRETER_DIR/cms-round-wrapper.tcl" \
     ) || {
       echo "FAIL (non-zero exit)"
       FAIL=$((FAIL + 1))
