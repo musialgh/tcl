@@ -59,7 +59,7 @@ evaluate_dance_final:
     field     : { start_no+ : nat },
     /// marks of *remaining* (unplaced) starts only
     marks(template_evaluate_round), ///< use same-name argument pattern from template
-    dance     : any,
+    dance     : txt,
     for_place : nat = 1,
 ->
     report(template_evaluate_round)
@@ -79,9 +79,9 @@ where
 
 /// Recursively refine a tie for <for_place>, starting with R5 from <by_place>
 refine_r5:
-    field     : { start_no+ : nat },
+    field(evaluate_dance_final),
     marks(template_evaluate_round),
-    dance       : any,
+    dance       : txt,
     for_place   : nat,
     by_place    : nat = 1
 ->
@@ -91,10 +91,12 @@ refine_r5(field, marks, dance, for_place, by_place) =
     merge(report_counts, single)                                                if #candidates = 1 |
     merge(report_counts, refine_r7(field, unplaced, dance, for_place, by_place)) 
 where
+    jury = keys(first(marks)[dance][""]),
     // extract relevant count column
     r5_count = map(my_marks in marks, count(mark in my_marks[dance][""], mark <= by_place)),
     // suppress sub-majority results (note: TSO also reports sub-majority counts -- but we don't like that!)
     r5_count_m = filter(count in r5_count, 2 * count > #jury),
+    
     // report counts considered
     report_counts = map(
         my_count in r5_count_m,
@@ -103,26 +105,16 @@ where
             "reason" : "Rules 5,6 for place {by_place}"
         } } } } } }
     ),    
-    candidates = arg_max(r5_count_m), // returns key -> key mapping(s) for all occurrences of the maximum
-    unplaced   = filter(start, _ in marks, ?candidates[start]),
-    single     = assign_place(
-        first(candidates), dance, for_place, for_place, 
-        "Rules 5,6,8: highest majority count {max(r5_count_m)} on place {by_place}"
-    );
-// refine_r5()    
+    // filter marks by maximum count
+    r5_candidates = arg_max(r5_count_m), // returns key -> key mapping(s) for all occurrences of the maximum
+    r5_unplaced   = filter_keys(marks, r5_candidates), // filter arg1 by keys of arg2
+    r5_single     = assign_place(
+        r5_candidates, dance, for_place, for_place, 
+        "Rules 5,6,8: highest majority count {max(r5_count)} on place {by_place}"
+    ),
 
-
-/// Recursively refine a tie for <for_place>, ustarting with R7 from <by_place>
-refine_r7(refine_r5); // using refiner5 signature unchanged => no need to re-define
-
-refine_r7(field, marks, dance, for_place, by_place) =
-    merge(report_sums, single)                                                  if #candidates = 1   |
-    merge(report_sums, refine_r5(field, marks, dance, for_place, by_place + 1)) if by_place < #field |
-    merge(report_sums, shared)
-where
     // extract relevant sum column
-    r5_count = map(my_marks in marks, count(mark in my_marks[dance][""],         mark <= by_place)),
-    r7_sum   = map(my_marks in marks, sum  (mark in my_marks[dance][""], mark if mark <= by_place | 0)),
+    r7_sum = map(my_marks in marks, sum(mark in r5_unplaced[dance][""], mark if mark <= by_place | 0)),
     // report sums considered
     report_sums = map(
         my_sum in r7_sum,
@@ -130,15 +122,21 @@ where
             "value"  : my_sum, 
             "reason" : "Rule 7 for place {by_place}"
         } } } } } }
-    ),    
-    candidates = arg_min(r7_sum), // returns key -> key mapping(s) for all occurrences of the minimum
-    unplaced   = filter(start, _ in marks, ?candidates[start]),
-    single     = assign_place(
-        first(candidates), dance, for_place, for_place, 
-        "Rules 7a,b: majority count {max(r5_count)} with lowest sum {min(r7_sum)} on place {by_place}"
     ),
-    shared = {}
-// refine_r7()    
+    // filter marks by minimum sum
+    r7_candidates = arg_min(r7_sum), // returns key -> key mapping(s) for all occurrences of the minimum
+    r7_unplaced   = filter_keys(r5_unplaced, r7_candidates),
+    r7_single     = assign_place(
+        r7_candidates, dance, for_place, for_place, 
+        "Rule 7: lowest sum {min(r7_sum)} on place {by_place}"
+    ),
+    r7_shared     = assign_place(
+        keys(r7_candidates), dance, for_place, for_place + #r7_candidates - 1, 
+        "Rule 7: shared place {for_place}..{for_place + #r7_candidates - 1} with lowest sum {min(r7_sum)} on place {by_place}"
+    ),
+// refine_r5()    
+
+
 
 
 
@@ -317,24 +315,24 @@ where
 // Helpers =============================================================================================================
 
 
-
-/// Convert a list of score strings into a list of place ranges.
-/// ATT: We assume *lower* score value is better, as in marks or place or time values!
-compute_places: 
-    scores : { start_no+ : object } 
+/// Process a single or shared place assigment for a dance *or* round 
+assign_place:
+    start_no    : nat,
+    dance       : txt = "", ///< empty string as default key for non-dance-specific entries
+    place_min   : nat,
+    place_max   : nat,
+    reason      : txt
 ->
-    places : { start_no+ : { "pmin" : nat, "pmax" : nat, "pval" : real } };
+    report(template_evaluate_round);
 
-compute_places(scores) =
-    map(
-        score in scores, 
-        { "pmin": pmin, "pmax": pmax, "pval" : pval }
-        where 
-            // please note: element-wise comparison of objects, in key order, is a language feature
-            pmin = 1       + count(other_score in scores, other_score < score),
-            pmax = #scores - count(other_score in scores, other_score > score),
-            pval = (pmin + pmax) / 2
-    );
+assign_place(start_no, dance, place_min, place_max, reason) =
+    { start_no : { dance : { "" : { "" : { 
+        "place_min" : { "value" : place_min, "reason" : reason }, 
+        "place_max" : { "value" : place_max, "reason" : reason } 
+    } } } } };
+
+
+
 
 
 
