@@ -85,7 +85,7 @@ FUNCTION evaluate_dance_final(starts, jury, round, dance):
             IF  ROWS(candidates) = 1:
                 CALL assign_place(unplaced, candidates.start, round, dance, for_place, for_place,
                                     "Rules 7a,b: majority count {candidates.num} "
-                                    "with highest sum {candidates.sum} on place {by_place}");
+                                    "with lowest sum {candidates.sum} on place {by_place}");
                 LET candidates = SELECT * FROM candidates WHERE FALSE;
 
         # criterions exhausted: share place for remaining candidates
