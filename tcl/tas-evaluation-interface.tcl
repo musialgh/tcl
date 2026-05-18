@@ -12,7 +12,7 @@ template_evaluate_round:
     /// - two values are obligatory per start (actual placing):
     ///   - start_no : { "" : { ... { "place_min" : { value : nat, reason : txt } } ... } }
     ///   - start_no : { "" : { ... { "place_max" : { value : nat, reason : txt } } ... } }
-    report : { start_no+ : { round_element+ : { group+ : 
+    report : { start_no* : { round_element+ : { group+ : 
                                                 { subgroup+ : 
                                                   { subsubgroup+ : 
                                                     { key+ : { "value" : num, "reason" : txt } } } } } } };
