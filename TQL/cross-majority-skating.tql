@@ -166,7 +166,7 @@ FUNCTION perform_skating(unplaced, tie, starts, jury, round, dances, final_marks
     LET candidates = tie; # enforce [in] semantics while reducing <candidates>
 
     # report r10 application
-    LET apply_r10 = SELECT start, round, "R10-applied" AS group, for_place AS subgroup, 
+    LET apply_r10 = SELECT start, round, "R10-applied" AS group, for_place AS subgroup, "X" AS value,
                            "Rule 9b: sum {sum} tie on place {for_place}" AS reason FROM candidates;
     INSERT INTO report VALUES apply_r10;
     # fetch counts and sums better or equal target place
@@ -198,7 +198,7 @@ FUNCTION perform_skating(unplaced, tie, starts, jury, round, dances, final_marks
         RETURN;
 
     # report r11 application
-    LET apply_r11 = SELECT start, round, "R11-applied" AS group, for_place AS subgroup, 
+    LET apply_r11 = SELECT start, round, "R11-applied" AS group, for_place AS subgroup, "X" AS value, 
                            "Rule 10e: sum {sum} tie on place {for_place}" AS reason FROM candidates;
     INSERT INTO report VALUES apply_r11;
     
