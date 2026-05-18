@@ -199,7 +199,7 @@ FUNCTION perform_skating(unplaced, tie, starts, jury, round, dances, final_marks
 
     # report r11 application
     LET apply_r11 = SELECT start, round, "R11-applied" AS group, for_place AS subgroup, "X" AS value, 
-                           "Rule 10e: sum {sum} tie on place {for_place}" AS reason FROM candidates;
+                           "Rule 10e: sum {candidates[1].sum} tie on place {for_place}" AS reason FROM candidates;
     INSERT INTO report VALUES apply_r11;
     
     FOR by_place IN for_place .. ROWS(starts)
