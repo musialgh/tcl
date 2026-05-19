@@ -1,6 +1,6 @@
 # TCL Design
 
-TCL stands for _Tanzen Competition Language_. It is a small functional DSL for defining
+TCL stands for _TAS Configuration Language_. It is a small functional DSL for defining
 ballroom-dance competition adjudication algorithms. A TCL program is a set of typed function
 definitions. The interpreter loads one or more `.tcl` files, evaluates a named function against a
 JSON input, and writes the result as JSON to stdout.
