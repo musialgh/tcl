@@ -4,7 +4,8 @@ const path = require('path');
 let client;
 
 function activate(context) {
-    const serverBin = path.join(__dirname, 'server', 'tql-lsp');
+    const serverBin = path.join(__dirname, 'server',
+        'tql-lsp' + (process.platform === 'win32' ? '.exe' : ''));
 
     const serverOptions = {
         command: serverBin,
