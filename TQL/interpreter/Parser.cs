@@ -122,7 +122,14 @@ public class Parser(List<Token> tokens)
     private ImportDirective ParseImport()
     {
         var tok = Consume();
-        string path = Expect(Tk.StrLit).Text;
+        // accept both 'path' and "path" (StrPat without interpolation)
+        var pathTok = Peek();
+        string path = pathTok.Kind switch
+        {
+            Tk.StrLit => Consume().Text,
+            Tk.StrPat => Consume().Text,
+            _ => throw new TqlParseException($"Expected path string, got '{pathTok.Text}'", pathTok.Line, pathTok.Col)
+        };
         Expect(Tk.Semi);
         return new ImportDirective(path, tok.Line, tok.Col);
     }
@@ -621,14 +628,18 @@ public class Parser(List<Token> tokens)
                 Consume(); return new IdentExpr("*", t.Line, t.Col);
 
             default:
-                // keywords that double as aggregate function names (SUM, COUNT, MIN, etc.)
-                if ((int)t.Kind >= (int)Tk.KwAbort && Peek(1).Kind == Tk.LParen)
+                // any keyword can be used as a variable or function name
+                if ((int)t.Kind >= (int)Tk.KwAbort)
                 {
-                    Consume(); // keyword
-                    Consume(); // (
-                    var args = ParseArgList();
-                    Expect(Tk.RParen);
-                    return new FuncCallExpr(t.Text, args, t.Line, t.Col);
+                    Consume();
+                    if (Peek().Kind == Tk.LParen)
+                    {
+                        Consume(); // (
+                        var args = ParseArgList();
+                        Expect(Tk.RParen);
+                        return new FuncCallExpr(t.Text, args, t.Line, t.Col);
+                    }
+                    return new IdentExpr(t.Text, t.Line, t.Col);
                 }
                 Err($"Unexpected '{t.Text}' in expression", t);
                 return null!;

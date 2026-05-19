@@ -15,7 +15,7 @@ public class Lexer(string src, string sourceName = "")
     private int    _line = 1;
     private int    _col  = 1;
 
-    private static readonly Dictionary<string, Tk> Keywords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, Tk> Keywords = new(StringComparer.Ordinal)
     {
         ["ABORT"]    = Tk.KwAbort,    ["ADD"]      = Tk.KwAdd,
         ["AND"]      = Tk.KwAnd,      ["AS"]       = Tk.KwAs,
