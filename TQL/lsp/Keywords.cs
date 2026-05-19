@@ -4,6 +4,15 @@ static class Keywords
     // Values are Markdown documentation shown in hover and completion tooltips.
     public static readonly Dictionary<string, string> All = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["ABORT"] = """
+            **ABORT**
+            ```
+            ABORT <error-message>
+            ```
+            Terminates the TQL interpreter immediately with an unrecoverable error.
+            Use when an internal invariant is violated and continuing is unsafe.
+            """,
+
         ["ADD"] = """
             **ADD COLUMN**
             ```
@@ -116,6 +125,24 @@ static class Keywords
 
         ["FROM"] = "**FROM** — source table clause in `SELECT … FROM`, `UPDATE … FROM`, `CONCAT TO … FROM`.",
 
+        ["GLOBAL"] = """
+            **GLOBAL** — two forms:
+
+            1. Import existing globals into the current function scope:
+            ```
+            GLOBAL <identifier> [, <identifier>]*
+            ```
+            Makes the listed global variables visible inside the current function body.
+            All identifiers must already exist in the global scope.
+            Must not appear in global code.
+
+            2. Create (or replace) a global variable and make it locally visible:
+            ```
+            GLOBAL <identifier> = <expression>
+            ```
+            Defines or replaces a global-scope variable and simultaneously imports it.
+            """,
+
         ["FUNCTION"] = """
             **FUNCTION**
             ```
@@ -166,9 +193,11 @@ static class Keywords
             **INSERT INTO**
             ```
             INSERT INTO <target> VALUES <source> [USING {<src-col> [AS <tgt-col>][,]}+]
+            INSERT INTO <target> VALUES ROW(…) [, ROW(…)]*
             ```
             Inserts **new rows** only; duplicate keys cause an error.
             If the target key is `GUID` and the source has no key data, keys are auto-generated.
+            Multiple `ROW(…)` literals can be supplied as a comma-separated list.
             Returns a single-column table of all new keys. Can also be used as a directive.
             """,
 
@@ -202,6 +231,16 @@ static class Keywords
             LIMIT <n> ON DISTINCT <col-list>
             ```
             Restricts result rows. `ON DISTINCT` counts **blocks** of consecutive equal values (use with `ORDER BY`).
+            """,
+
+        ["MATCH"] = """
+            **VALUES MATCH** — WHERE condition that tests multiple columns at once:
+            ```
+            WHERE VALUES MATCH <row-expression>
+            ```
+            Returns `TRUE` when all columns present in *row-expression* match the
+            identically-named columns of the source table.
+            Typically used with `ROW(…)` to check for duplicate rows before inserting.
             """,
 
         ["MAX"] = "**MAX(`<expr>`)** — aggregate: maximum value.",
@@ -323,7 +362,9 @@ static class Keywords
         ["WHERE"] = """
             **WHERE `<condition>`**
             Filters rows in `SELECT` and `UPDATE … SET`.
-            Extra term: `<column> IN <column-expr>` (single-column membership test).
+            Extra terms:
+            - `<column> [NOT] IN <column-expr>` — single-column membership test; `column-expr` must be a single-column table.
+            - `VALUES MATCH <row-expression>` — true when all named columns in the row equal the source table's columns.
             """,
 
         ["WHILE"] = """

@@ -51,7 +51,16 @@ def parse_responses(raw: bytes) -> dict:
 #   1: FUNCTION foo():
 #   2:     FOR x IN marks:
 #   3:     xyz
-DOC = "SEL\nFUNCTION foo():\n    FOR x IN marks:\n    xyz\n"
+#   4: FUNCTION bar(x, y = 0):
+#   5:     bar(
+DOC = (
+    "SEL\n"
+    "FUNCTION foo():\n"
+    "    FOR x IN marks:\n"
+    "    xyz\n"
+    "FUNCTION bar(x, y = 0):\n"
+    "    bar("
+)
 
 inp = b""
 inp += rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -77,8 +86,20 @@ inp += rpc({"jsonrpc": "2.0", "id": 4, "method": "textDocument/hover",
 inp += rpc({"jsonrpc": "2.0", "id": 5, "method": "textDocument/hover",
             "params": {"textDocument": {"uri": "file:///test.tql"},
                        "position": {"line": 3, "character": 4}}})
-# id=6: shutdown
-inp += rpc({"jsonrpc": "2.0", "id": 6, "method": "shutdown", "params": {}})
+# id=6: go-to-definition on "bar" identifier in the call on line 5, col 4
+inp += rpc({"jsonrpc": "2.0", "id": 6, "method": "textDocument/definition",
+            "params": {"textDocument": {"uri": "file:///test.tql"},
+                       "position": {"line": 5, "character": 4}}})
+# id=7: go-to-definition on unknown word "xyz" (line 3, col 4) → null
+inp += rpc({"jsonrpc": "2.0", "id": 7, "method": "textDocument/definition",
+            "params": {"textDocument": {"uri": "file:///test.tql"},
+                       "position": {"line": 3, "character": 4}}})
+# id=8: signatureHelp inside bar( at end of line 5 (col 8, just after the open paren)
+inp += rpc({"jsonrpc": "2.0", "id": 8, "method": "textDocument/signatureHelp",
+            "params": {"textDocument": {"uri": "file:///test.tql"},
+                       "position": {"line": 5, "character": 8}}})
+# id=9: shutdown
+inp += rpc({"jsonrpc": "2.0", "id": 9, "method": "shutdown", "params": {}})
 inp += rpc({"jsonrpc": "2.0", "method": "exit", "params": {}})
 
 # ---- run server --------------------------------------------------------------
@@ -100,6 +121,10 @@ check("initialize: completionProvider declared",
       "completionProvider" in caps)
 check("initialize: hoverProvider == true",
       caps.get("hoverProvider") is True)
+check("initialize: definitionProvider == true",
+      caps.get("definitionProvider") is True)
+check("initialize: signatureHelpProvider declared",
+      "signatureHelpProvider" in caps)
 
 # completion — specific prefix
 items2 = [i["label"] for i in responses.get(2, {}).get("result", {}).get("items", [])]
@@ -115,7 +140,8 @@ check("completion(empty prefix): isIncomplete == false",
       r3.get("isIncomplete") is False)
 for kw in ["SELECT", "FUNCTION", "FOR", "WHILE", "IF", "LET",
            "UPDATE", "INSERT", "CREATE", "DROP", "ADD", "IMPORT",
-           "PLACE_MIN", "PLACE_MAX", "SUM", "COUNT", "AVG", "MEDIAN"]:
+           "PLACE_MIN", "PLACE_MAX", "SUM", "COUNT", "AVG", "MEDIAN",
+           "GLOBAL", "ABORT"]:
     check(f"completion(empty prefix): includes {kw}", kw in items3)
 
 # hover — known keyword
@@ -132,9 +158,43 @@ if r4 is not None:
 r5 = responses.get(5, {}).get("result")
 check("hover('xyz'): result is null", r5 is None)
 
+# go-to-definition — known function "bar" (line 4, FUNCTION bar(...))
+r6 = responses.get(6, {}).get("result")
+check("definition('bar'): result is non-null", r6 is not None)
+if r6 is not None:
+    check("definition('bar'): points to line 4",
+          r6.get("range", {}).get("start", {}).get("line") == 4,
+          f"got: {r6}")
+    check("definition('bar'): uri is the test document",
+          r6.get("uri") == "file:///test.tql", f"got: {r6}")
+
+# go-to-definition — unknown word "xyz"
+r7 = responses.get(7, {}).get("result")
+check("definition('xyz'): result is null", r7 is None)
+
+# signatureHelp — inside bar( at col 8
+r8 = responses.get(8, {}).get("result")
+check("signatureHelp('bar('): result is non-null", r8 is not None)
+if r8 is not None:
+    sigs = r8.get("signatures", [])
+    check("signatureHelp('bar('): one signature returned", len(sigs) == 1,
+          f"got: {sigs}")
+    if sigs:
+        label = sigs[0].get("label", "")
+        check("signatureHelp('bar('): label contains 'bar'",
+              label.startswith("bar("), f"got: {label!r}")
+        check("signatureHelp('bar('): label contains parameter 'x'",
+              "x" in label, f"got: {label!r}")
+        check("signatureHelp('bar('): label contains 'y = 0'",
+              "y = 0" in label, f"got: {label!r}")
+    check("signatureHelp('bar('): activeSignature == 0",
+          r8.get("activeSignature") == 0)
+    check("signatureHelp('bar('): activeParameter == 0",
+          r8.get("activeParameter") == 0)
+
 # shutdown
 check("shutdown: result is null",
-      responses.get(6, {}).get("result") is None)
+      responses.get(9, {}).get("result") is None)
 
 # exit code
 check("exit: server exited with code 0",

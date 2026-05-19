@@ -15,7 +15,8 @@
     { "open": "'",  "close": "'"  }
   ],
   "indentationRules": {
-    "increaseIndentPattern": ":[ \\t]*(#.*)?$"
+    "increaseIndentPattern": ":[ \\t]*(#.*)?$",
+    "decreaseIndentPattern": "^[ \\t]*(ELSE\\b)"
   },
   "onEnterRules": [
     {
