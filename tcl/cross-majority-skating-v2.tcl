@@ -125,7 +125,7 @@ where
     ),
     // filter candidates by minimum sum (possibly empty list!)
     r7_choice     = arg_min(r7_sums), // returns key -> key mapping(s) for all occurrences of the minimum
-    r7_candidates = filter_keys(r5_candidates, r7_choice[start]), // candidates reduced to choice
+    r7_candidates = filter_keys(r5_candidates, r7_choice), // candidates reduced to choice
     // report placing (controlled by lazy evaluation)
     r7_single     = assign_place(
         r7_choice, dance, for_place, for_place, 
@@ -266,12 +266,12 @@ where
     ),
     // filter candidates by maximum count
     r10a_choice     = arg_max(r10_counts),
-    r10a_candidates = filter_keys(our_placings, r10_choice), // candidates reduced to choice
+    r10a_candidates = filter_keys(our_placings, r10a_choice), // candidates reduced to choice
     // report placing (controlled by lazy evaluation)
     r10a_single     = assign_place(
-        r10_choice, "", for_place, for_place + #r10_choice - 1, 
+        r10a_choice, "", for_place, for_place + #r10a_choice - 1, 
         "R10a,b: highest count {max(r10_counts)} of places {for_place} and better over all dances"
-    );
+    ),
 
     // obtain sums of places equal to or better than target place
     r10_sums        = map(
