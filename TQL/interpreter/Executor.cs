@@ -796,18 +796,21 @@ public class Executor
     private void ApplyOrderBy(Table result, List<OrderByCol> orderBy, LocalScope scope)
     {
         var rows = result.GetRowsInOrder().ToList();
-        rows.Sort((a, b) =>
+        // Evaluate all sort keys up front so exceptions surface cleanly (not wrapped by Sort).
+        var keys = rows.Select(r =>
+            orderBy.Select(ob => AutoScalar(Eval(ob.Expr, scope, result, r.RowId))).ToArray()
+        ).ToList();
+        var indexed = rows.Select((r, i) => (r, i)).ToList();
+        indexed.Sort((a, b) =>
         {
-            foreach (var ob in orderBy)
+            for (int k = 0; k < orderBy.Count; k++)
             {
-                var va = AutoScalar(Eval(ob.Expr, scope, result, a.RowId));
-                var vb = AutoScalar(Eval(ob.Expr, scope, result, b.RowId));
-                int c  = TqlValueComparer.Instance.Compare(va, vb);
-                if (c != 0) return ob.Desc ? -c : c;
+                int c = TqlValueComparer.Instance.Compare(keys[a.i][k], keys[b.i][k]);
+                if (c != 0) return orderBy[k].Desc ? -c : c;
             }
             return 0;
         });
-        result.SetSortOrder(rows.Select(r => r.RowId));
+        result.SetSortOrder(indexed.Select(x => x.r.RowId));
     }
 
     // ── LIMIT ─────────────────────────────────────────────────────────────────
