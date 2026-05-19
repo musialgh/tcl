@@ -113,6 +113,7 @@ public class Parser(List<Token> tokens)
             Tk.KwConcat   => ParseConcatDir(),
             Tk.KwAdd      => ParseAddColDir(),
             Tk.KwSave     => ParseSaveDir(),
+            Tk.KwLoad     => ParseLoadDir(),
             _             => ParseExprOrAssignDir()
         };
     }
@@ -398,6 +399,19 @@ public class Parser(List<Token> tokens)
         Expect(Tk.KwInto);
         var path = ParseExpr(); Expect(Tk.Semi);
         return new SaveTableDirective(name, path, tok.Line, tok.Col);
+    }
+
+    /// <summary>LOAD TABLE FROM &lt;path&gt; INTO &lt;target&gt;</summary>
+    private LoadTableIntoDirective ParseLoadDir()
+    {
+        var tok = Consume(); // LOAD
+        Expect(Tk.KwTable);
+        Expect(Tk.KwFrom);
+        var path = ParseExpr();
+        Expect(Tk.KwInto);
+        string target = ExpectName();
+        Expect(Tk.Semi);
+        return new LoadTableIntoDirective(path, target, tok.Line, tok.Col);
     }
 
     /// <summary>

@@ -50,6 +50,7 @@ public record UpdateFromDirective   (string Target, ExprNode Source, List<UsingC
 public record ConcatToDirective     (string Target, ExprNode Source, List<UsingCol>? Using, int Line, int Col) : DirectiveNode(Line, Col);
 public record AddColumnDirective    (string ColName, ColumnType ColType, ExprNode? Default, string TableName, bool IfNotExists, int Line, int Col) : DirectiveNode(Line, Col);
 public record SaveTableDirective    (string TableName, ExprNode Path, int Line, int Col) : DirectiveNode(Line, Col);
+public record LoadTableIntoDirective(ExprNode Path, string Target, int Line, int Col) : DirectiveNode(Line, Col);
 public record ExprDirective         (ExprNode Expr, int Line, int Col) : DirectiveNode(Line, Col);
 
 // ── expressions ───────────────────────────────────────────────────────────────

@@ -124,6 +124,10 @@ public class Executor
                 DoSaveTable(std, scope);
                 break;
 
+            case LoadTableIntoDirective ltd:
+                DoLoadTableInto(ltd, scope);
+                break;
+
             default:
                 throw new TqlRuntimeException($"Unknown directive type {d.GetType().Name}", d.Line, d.Col);
         }
@@ -1027,6 +1031,51 @@ public class Executor
         if (!Path.IsPathRooted(path)) path = Path.Combine(_scriptDir, path);
         using var writer = new StreamWriter(path);
         CsvIO.WriteTable(tbl, writer);
+    }
+
+    /// <summary>LOAD TABLE FROM path INTO target: replace all rows of an existing table from CSV.</summary>
+    private void DoLoadTableInto(LoadTableIntoDirective ltd, LocalScope scope)
+    {
+        string path = Eval(ltd.Path, scope).AsText();
+        if (!Path.IsPathRooted(path)) path = Path.Combine(_scriptDir, path);
+
+        var target = ResolveTable(ltd.Target, scope, ltd.Line, ltd.Col);
+
+        using var reader = new StreamReader(path);
+        var csv = CsvIO.ReadTable(reader)
+            ?? throw new TqlRuntimeException($"LOAD INTO: '{path}' is empty", ltd.Line, ltd.Col);
+
+        // validate: every CSV column must exist in target with a compatible type
+        foreach (var csvCol in csv.ColumnNames)
+        {
+            if (!target.HasColumn(csvCol))
+                throw new TqlRuntimeException(
+                    $"LOAD INTO: column '{csvCol}' from CSV does not exist in '{ltd.Target}'",
+                    ltd.Line, ltd.Col);
+            int ti = target.ColIndex(csvCol);
+            int ci = csv.ColIndex(csvCol);
+            if (target.GetColType(ti) == ColumnType.Decimal && csv.GetColType(ci) == ColumnType.Text)
+                throw new TqlRuntimeException(
+                    $"LOAD INTO: column '{csvCol}' is Decimal in '{ltd.Target}' but has text values in CSV",
+                    ltd.Line, ltd.Col);
+        }
+
+        // discard existing rows
+        target.DeleteRows(target.AllRowIds().ToList());
+
+        // insert CSV rows; columns absent in CSV receive their declared DEFAULT
+        foreach (var (_, csvCells) in csv.GetRowsInOrder())
+        {
+            var cells = new TqlValue[target.ColumnCount];
+            for (int i = 0; i < target.ColumnCount; i++)
+            {
+                string col = target.ColumnNames[i];
+                cells[i] = csv.HasColumn(col)
+                    ? csvCells[csv.ColIndex(col)]
+                    : target.GetDefault(i);
+            }
+            target.InsertRow(cells);
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

@@ -110,6 +110,17 @@ _rows[rid] = arr;
 (`BreakSignal`, `ContinueSignal`, `ReturnSignal`) that are caught by the
 corresponding loop / function executor.  They must never escape the interpreter.
 
+## LOAD TABLE (two forms)
+
+| Form | What it does |
+|------|-------------|
+| `LET t = LOAD TABLE FROM 'file.csv';` | Expression — creates and returns a new Table |
+| `LOAD TABLE FROM 'file.csv' INTO target;` | Directive — replaces rows of an *existing* table |
+
+The directive form (`LoadTableIntoDirective`) validates that every CSV column exists in the
+target and is type-compatible (Decimal target ← Text CSV column → error).  Columns absent in
+the CSV receive their declared `DEFAULT`.  Existing rows are discarded before loading.
+
 ## Script files
 
 | File | Status | Notes |
