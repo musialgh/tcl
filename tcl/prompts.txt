@@ -60,3 +60,8 @@ Please write a script in my new language TQL:
 * in order to achieve JOINs for 1:n relations, please use one SELECT and one CONCAT-TO-construct to simulate a JOIN.
 * important: please ask back if your thinking starts to take unusually long!
 
+
+
+File TQL/TQL-Design.md has seen a lot of manual updates recently. Please make a plan
+* to update the LSP provider TQL/lsp to reflect the current starte
+* if you need a reference file, 

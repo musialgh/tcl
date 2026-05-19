@@ -160,22 +160,22 @@ FUNCTION evaluate_round_final(do_skating = TRUE): # resolve ties via skating rul
 
 # Apply skating rules 10, 11 to given tie group.
 FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, value) with relevant marks
-                         candidates,    # table (start) with starts to consider for skating
+                         scores,        # table (start, sum) with starts and place sum to consider for skating
                          for_place):    # place to be assigned next
     GLOBAL round, report;
 
     # report r10 application
     LET apply_r10 = SELECT start, round AS round, "R10-applied" AS group, for_place AS subgroup, "X" AS value,
-                           "R9b: sum {sum} tie on place {for_place}" AS reason FROM candidates;
+                           "R9b: sum {scores[1].sum} tie on place {for_place}" AS reason FROM scores;
     INSERT INTO report VALUES apply_r10;
     # fetch counts and sums better or equal target place
     LET scores = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM report
                         WHERE report.round = round AND round_element IS NOT NULL AND key = "place_val" 
-                                AND value <= for_place AND start IN candidates
+                                AND value <= for_place AND start IN scores.start
                         GROUP BY start;
  
     # report counts considered
-    CALL report_count(scores, NULL AS dance, "R10-criteria" AS group, by_place, "R10a,b for place {for_place}";
+    CALL report_count(scores, NULL AS dance, "R10-criteria" AS group, by_place, "R10a,b for place {for_place}");
     # fetch best-count occurrences among candidates
     LET scores = SELECT * FROM scores ORDER BY num DESC LIMIT 1 ON DISTINCT num;
     # try to resolve on count
@@ -184,7 +184,7 @@ FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, valu
                             "R10a,b: highest count {scores.num} on place {for_place}");
 
     # report sums considered
-    CALL report_sum(scores, NULL AS dance, "R10-criteria" AS group, by_place, "R10c,d for place {for_place}";
+    CALL report_sum(scores, NULL AS dance, "R10-criteria" AS group, by_place, "R10c,d for place {for_place}");
     # fetch best-sum occurrences among candidates
     LET scores = SELECT * FROM scores ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
     # try to resolve on sum
@@ -229,13 +229,13 @@ FUNCTION assign_place(starts,       # table (start) to process, subset of <unpla
 
 
 # Report count attributes for rules using count fields.
-FUNTION report_count(scores,            # table (start, num, sum) to report values from
-                     dance = NULL,      # optional dance id
-                     group = NULL,      # optional group header, intended for skating rules
-                     place,             # place the attribute belongs to
-                     reason = NULL):    # textual description of entry
+FUNCTION report_count(scores,            # table (start, num, sum) to report values from
+                      dance = NULL,      # optional dance id
+                      group = NULL,      # optional group header, intended for skating rules
+                      place,             # place the attribute belongs to
+                      reason = NULL):    # textual description of entry
     GLOBAL report, round;
-    FOR s IN scores:
+    FOR s IN scores.start:
         row = ROW(s.start, round, dance AS round_element, group, place AS subgroup, 'count' AS key, s.num AS value, reason);
         # we must "manually" check if entry already exists (no suitable indexing)
         IF NOT SELECT COUNT(*) FROM report WHERE VALUES MATCH row:
@@ -244,14 +244,14 @@ FUNTION report_count(scores,            # table (start, num, sum) to report valu
 
 
 # Report sum attributes for rules using sum fields.
-FUNTION report_sum(  scores,            # table (start, num, sum) to report values from
-                     dance = NULL,      # optional dance id
-                     group = NULL,      # optional group header, intended for skating rules
-                     place,             # place the attribute belongs to
-                     reason = NULL):    # textual description of entry
+FUNCTION report_sum(  scores,            # table (start, num, sum) to report values from
+                      dance = NULL,      # optional dance id
+                      group = NULL,      # optional group header, intended for skating rules
+                      place,             # place the attribute belongs to
+                      reason = NULL):    # textual description of entry
     GLOBAL report, round;
-    FOR c IN candidates:
-        row = ROW(c.start, round, dance AS round_element, group, place AS subgroup, 'sum' AS key, c.sum AS value, reason);
+    FOR s IN scores.start:
+        row = ROW(s.start, round, dance AS round_element, group, place AS subgroup, 'sum' AS key, c.sum AS value, reason);
         # we must "manually" check if entry already exists (no suitable indexing)
         IF NOT SELECT COUNT(*) FROM report WHERE VALUES MATCH row:
             INSERT INTO report VALUES row;
