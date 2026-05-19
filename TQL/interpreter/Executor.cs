@@ -545,7 +545,7 @@ public class Executor
         for (int i = 0; i < re.Fields.Count; i++)
         {
             var f = re.Fields[i];
-            var v = Eval(f.Value, scope, srcTable, srcRowId, alias);
+            var v = AutoScalar(Eval(f.Value, scope, srcTable, srcRowId, alias));
             string colName = f.Name ?? DefaultColName(f.Value, i);
             var colType = v switch
             {

@@ -46,8 +46,8 @@ FUNCTION evaluate_round_elimination():
         ELSE:
             LET reason = "F6.8.1: shared rank {placing.place_min}..{placing.place_max} in count of marks";
         INSERT INTO report VALUES
-            ROW(start, round, 'place_min' AS key, placing.place_min AS value, reason),
-            ROW(start, round, 'place_max' AS key, placing.place_max AS value, reason);
+            ROW(s.start, round, 'place_min' AS key, placing.place_min AS value, reason),
+            ROW(s.start, round, 'place_max' AS key, placing.place_max AS value, reason);
 # evaluate_round_elimination()
 
 

@@ -7,6 +7,7 @@ IF FALSE:
     LOAD TABLE FROM 'test-data/cms-elimination-marks.csv' INTO marks;
 IF TRUE:
     CALL prepare_interface_output();
+    GLOBAL round = NULL;
 
 # perform evaluation
 CALL evaluate_round_elimination();
