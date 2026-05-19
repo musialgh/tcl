@@ -31,13 +31,7 @@ dotnet publish ../tql-lsp.csproj \
   -c Release -r linux-x64 --self-contained \
   -p:PublishSingleFile=true -o server/
 
-# 2. Bundle extension.js + vscode-languageclient into a single file
-npx esbuild extension.js \
-  --bundle --platform=node --target=node18 \
-  --external:vscode \
-  --outfile=extension.bundle.js
-
-# 3. Pack everything into the VSIX
+# 2. Pack everything into the VSIX (bundles extension.js automatically)
 python3 build_vsix.py
 ```
 

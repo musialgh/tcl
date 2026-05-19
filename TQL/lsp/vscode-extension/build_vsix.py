@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a .vsix from the extension directory without requiring vsce."""
 import json
-import os
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -12,6 +12,16 @@ name      = pkg["name"]
 version   = pkg["version"]
 publisher = pkg["publisher"]
 vsix_name = f"{name}-{version}.vsix"
+
+# Bundle extension.js + vscode-languageclient into a single file
+BUNDLE = ROOT / "extension.bundle.js"
+print("Bundling extension.js …")
+subprocess.run(
+    ["npx", "esbuild", "extension.js",
+     "--bundle", "--platform=node", "--target=node18",
+     "--external:vscode", f"--outfile={BUNDLE}"],
+    cwd=ROOT, check=True
+)
 
 # Files to include (relative to ROOT), mapped to their path inside the VSIX.
 # Extension content lives under "extension/" in the ZIP.

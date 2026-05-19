@@ -7,7 +7,7 @@
   "engines": {
     "vscode": "^1.82.0"
   },
-  "main": "./extension.bundle.js",
+  "main": "./extension.js",
   "contributes": {
     "languages": [
       {
@@ -30,11 +30,9 @@
     ]
   },
   "dependencies": {
-    "undici": "^5.29.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@vscode/vsce": "2.15",
     "esbuild": "^0.28.0"
   }
 }
