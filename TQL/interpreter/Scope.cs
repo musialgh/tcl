@@ -51,10 +51,10 @@ public class LocalScope
         return false;
     }
 
-    /// <summary>Bind: goes to local dict or (for global context) to global variables.</summary>
+    /// <summary>Bind: writes to global if in global context or previously declared GLOBAL; otherwise local.</summary>
     public void Bind(string name, TqlValue val)
     {
-        if (IsGlobal) _global.Variables[name] = val;
+        if (IsGlobal || _imported.Contains(name)) _global.Variables[name] = val;
         else _locals[name] = val;
     }
 
