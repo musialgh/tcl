@@ -64,4 +64,38 @@ Please write a script in my new language TQL:
 
 File TQL/TQL-Design.md has seen a lot of manual updates recently. Please make a plan
 * to update the LSP provider TQL/lsp to reflect the current starte
-* if you need a reference file, 
+* if you need a reference file, TQL/cross-majority-skating.tql should be syntactically correct
+* would be great to have go-to-definition working
+* would be great to have auto-indent working
+* would be even greater to have a bubble-help for function signatures
+
+
+please plan the implementation of a TQL interpreter in C#:
+* minimum CLI should be 
+  tql <script-name> {[-r <csv-file>] -i <table-name>} {[-w <csv-file>] -o <table-name> }
+** -i (input) gives a table variable to be prepared in global scope (can be repeated)
+** -o (output) gives a table variable in global scope to be exported after running (can be repeated)
+** -r (read file) gives a filename for the next -i's (repeatable)
+** -w (write file) gives a filename for the next -o's (repeatable)
+** before the 1st -r or -w, stdin or stdout are used, respectively
+** the filename - can be used to "switch back" to stdin/stdout later
+** <script-name> is the TCL script to start the global code from
+** for reading multiple tables from the same file, readinig suspends when a blank line is 
+   encountered (as definied in TQL/TQL-Design.md for SAVE)
+* please adhere to the suggested internal representation of table objects
+* please comment all function heads
+* please try to avoid redundant code
+* please note that my example file TQL/cross-majority-skating.tql is NOT tested,
+  so you should not blame your interpreter for all issues you might encounter with this script
+
+
+I have added a 2nd version of LOAD TABLE FROM... as follows:
+  - `LOAD TABLE FROM <csv-path> INTO <target-table>`
+  - lädt eine Tabelle aus einer CSV-Datei in ein *bestehendes* Tabellen-Objekt
+  - Dateiformat siehe `SAVE TABLE`
+  - *target-table* muss bereits existieren
+  - alle Spalten in der CSV-Tabelle müssen formatkompatibel in *target-table* existieren
+  - in der CSV-Tabelle "fehlende" Spalten werden gemäß `DEFAULT`-Festlegung gefüllt
+  - alle ggf. bereits in *target-table* vorhandenen Datenzeilen werden verworfen
+Please check if this can be added relatively easily to the existing implementation.
+

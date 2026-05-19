@@ -3,8 +3,8 @@
 # ------------------------------------------------
 
 
-# Set up empty tables for input (marks) and output (report)
-FUNCTION prepare_interface():
+# Set up interface table(s) for input
+FUNCTION prepare_interface_input():
     # marks table [IN]
     GLOBAL marks = CREATE TABLE;
     ADD COLUMN start                DECIMAL                 TO TABLE marks;
@@ -14,6 +14,14 @@ FUNCTION prepare_interface():
     ADD COLUMN adjudicator          TEXT    DEFAULT NULL    TO TABLE marks;
     ADD COLUMN value                DECIMAL                 TO TABLE marks;
 
+    # round is used to indicate the round subject to evaluation
+    # (to support access to marks from earlier rounds, if needed)
+    GLOBAL round  = NULL;
+# prepare_interface_input()
+
+
+# Set up interface table(s) for output
+FUNCTION prepare_interface_output():
     # report table [OUT]
     GLOBAL report = CREATE TABLE;
     ADD COLUMN start                DECIMAL                 TO TABLE report;
@@ -27,8 +35,11 @@ FUNCTION prepare_interface():
     # keys end
     ADD COLUMN value                DECIMAL                 TO TABLE report;
     ADD COLUMN reason               TEXT    DEFAULT NULL    TO TABLE report;
+# prepare_interface_output()
 
-    # round is used to indicate the round subject to evaluation
-    # (to support access to marks from earlier rounds, if needed)
-    GLOBAL round  = NULL;
+
+# Set up empty interface tables
+FUNCTION prepare_interface():
+    CALL prepare_interface_input();
+    CALL prepare_interface_output();
 # prepare_interface()

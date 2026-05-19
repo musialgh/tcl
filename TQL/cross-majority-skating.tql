@@ -125,7 +125,7 @@ FUNCTION evaluate_round_final(do_skating = TRUE): # resolve ties via skating rul
                         WHERE marks.round = round;
 
     # evaluate all dances
-    FOR dance IN dances: CALL evaluate_dance_final(dance);
+    FOR dance IN dances: CALL evaluate_dance_final(dance)
 
     # compute places sum over dances and add to report
     LET places_sums = SELECT start, round, "places_sum" AS key, SUM(value) AS value, 

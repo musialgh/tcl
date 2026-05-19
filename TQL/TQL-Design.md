@@ -61,14 +61,22 @@ Hier eine semi-formale Sprachdefinition von TQL,
 - `GLOBAL <identifier> = <expression>`
   - definiert und initialisiert eine Variable im *globalen Scope*
   - sofern ein gleichnamiges globales Objekt schon existiert, wird es stillschweigend ersetzt
-- `SAVE TABLE <table-name> INTO <csv-path>`
+- `LOAD TABLE FROM <csv-path> INTO <target-table>`
+  - lädt eine Tabelle aus einer CSV-Datei in ein *bestehendes* Tabellen-Objekt
+  - Dateiformat siehe `SAVE TABLE`
+  - *target-table* muss bereits existieren
+  - alle Spalten in der CSV-Tabelle müssen formatkompatibel in *target-table* existieren
+  - in der CSV-Tabelle "fehlende" Spalten werden gemäß `DEFAULT`-Festlegung gefüllt
+  - alle ggf. bereits in *target-table* vorhandenen Datenzeilen werden verworfen
+- `SAVE TABLE <source-table> INTO <csv-path>`
   - sichert eine einzelne Tabelle in eine CSV-Datei
   - Ausgabe-Format:
     - Trennzeichen `;`
     - Strings (auch Spalten-Namen) sind in `" "` eingeschlossen
     - zum String gehörende `"` sind als `\"` escaped
     - erste Zeile enthält die Spaltennamen
-    - alle folgenden Zeilen enthalten jeweils eine Daten-Zeile
+    - es folgen alle Daten-Zeilen
+    - zum Schluss eine Leerzeile (damit ggf. mehrere Tabellen aus einer Datei gelesen werden können)
 - `FUNCTION <function-name>({<param-name>[,]}*{[<param-name> = <default-value>][,]}*):`
   - definiert eine Benutzer-Funktion
   - für die Parameter wird nur die `[in]`-Semantik unterstützt
@@ -152,7 +160,7 @@ Hier eine semi-formale Sprachdefinition von TQL,
     wird der "Name" der neuen Tabelle ggf. durch eine `LET`-Direktive vergeben
 - `LOAD TABLE FROM <csv-path>`
   - lädt eine Tabelle aus einer CSV-Datei
-  - Dateiformat siehe `SAVE-TABLE`
+  - Dateiformat siehe `SAVE TABLE`
   - Hinweis zum "Namen" siehe `CREATE TABLE`
 
 **expression**:

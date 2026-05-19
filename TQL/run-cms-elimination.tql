@@ -1,0 +1,15 @@
+IMPORT 'cross-majority-skating.tql';
+
+# only for testing purposes, set up interface tables
+# (in TAS integration, these will be set up by the framework)
+IF FALSE:
+    CALL prepare_interface_output();
+    CALL prepare_interface_input();
+    LOAD DATA FROM 'test-data/cms-elimination-marks.csv' INTO marks;
+
+# perform evaluation
+CALL evaluate_round_elimination();
+
+# only for testing purpose, dump report
+IF FALSE:
+    SAVE TABLE report INTO 'test-data/cms-elimination-report.csv';
