@@ -546,7 +546,7 @@ public class Executor
         {
             var f = re.Fields[i];
             var v = Eval(f.Value, scope, srcTable, srcRowId, alias);
-            string colName = f.Name ?? $"col_{i}";
+            string colName = f.Name ?? DefaultColName(f.Value, i);
             var colType = v switch
             {
                 DecimalVal => ColumnType.Decimal,
@@ -559,6 +559,13 @@ public class Executor
         t.InsertRow(cells);
         return t;
     }
+
+    private static string DefaultColName(ExprNode expr, int i) => expr switch
+    {
+        TableColumn tc => tc.ColName,
+        IdentExpr ie   => ie.Name,
+        _              => $"col_{i}"
+    };
 
     // ── string interpolation ──────────────────────────────────────────────────
 
@@ -614,7 +621,15 @@ public class Executor
 
         if (hasGroup)
         {
-            var groups = GroupRows(src, filteredIds, spec.GroupBy);
+            var aliasMap = spec.Cols
+                .Where(c => c.Alias is not null)
+                .ToDictionary(c => c.Alias!, c => c.Expr);
+            var keyFuncs = spec.GroupBy.Select(g =>
+                aliasMap.TryGetValue(g, out var expr)
+                    ? (Func<int, TqlValue>)(rid => Eval(expr, scope, src, rid, alias))
+                    : (Func<int, TqlValue>)(rid => src.HasColumn(g) ? src.GetCell(rid, g) : TqlValue.Null)
+            ).ToList();
+            var groups = GroupRows(src, filteredIds, keyFuncs);
             foreach (var (_, groupIds) in groups)
                 AddResultRow(EvalGroupRow(spec.Cols, src, groupIds, scope, alias));
         }
@@ -766,16 +781,12 @@ public class Executor
     // ── GROUP BY ──────────────────────────────────────────────────────────────
 
     private static List<(TqlValue[] Key, List<int> RowIds)> GroupRows(
-        Table src, List<int> rowIds, List<string> groupCols)
+        Table src, List<int> rowIds, List<Func<int, TqlValue>> keyFuncs)
     {
-        var groups = new List<(TqlValue[] Key, List<int> Rows)>();
-        var keyMap  = new List<(TqlValue[], List<int>)>(); // ordered by first occurrence
-
+        var keyMap = new List<(TqlValue[], List<int>)>(); // ordered by first occurrence
         foreach (int rid in rowIds)
         {
-            var key = groupCols.Select(c => src.HasColumn(c) ? src.GetCell(rid, c) : TqlValue.Null)
-                               .ToArray();
-            // find matching group
+            var key = keyFuncs.Select(f => f(rid)).ToArray();
             int gi = keyMap.FindIndex(g => KeysEqual(g.Item1, key));
             if (gi < 0) { var list = new List<int> { rid }; keyMap.Add((key, list)); }
             else keyMap[gi].Item2.Add(rid);

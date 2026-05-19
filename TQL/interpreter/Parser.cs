@@ -565,6 +565,14 @@ public class Parser(List<Token> tokens)
                 string col = ExpectName();
                 inner = new TableColumn(inner, col, t.Line, t.Col);
             }
+            else if (Peek().Kind == Tk.BracketIdent)
+            {
+                var t = Consume();
+                if (!decimal.TryParse(t.Text, System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out var n))
+                    throw new TqlParseException($"Expected numeric index in [...], got '{t.Text}'", t.Line, t.Col);
+                inner = new TableIndex(inner, new NumberLit(n, t.Line, t.Col), t.Line, t.Col);
+            }
             else break;
         }
         return inner;
