@@ -90,11 +90,16 @@ refine_count_sum(field, candidates, dance, for_place, by_place) =
           "\nreport on current place: {merge(report_counts, report_sums)}"
     )
 where
-    jury = keys(first(candidates)[dance][""]),
+    // set helpers for single dance vs. R11 usage
+    dances    = { dance : dance } if dance | keys(first(candidates)),
+    marks_num = sum(d in dances, #first(candidates)[d][""]),
     // extract relevant count column, no matter if majority or not
-    r5_counts_all = map(my_marks in candidates, count(mark in my_marks[dance][""], mark <= by_place)),
+    r5_counts_all = map(
+        my_marks in candidates,
+        sum(d in dances, count(mark in my_marks[d][""], mark <= by_place))
+    ),
     // suppress sub-majority results (note: TSO also reports sub-majority counts -- but we don't like that!)
-    r5_counts = filter(count in r5_counts_all, 2 * count > #jury),
+    r5_counts = filter(count in r5_counts_all, 2 * count > marks_num),
     
     // report counts considered
     report_counts = map(
@@ -114,7 +119,10 @@ where
     ),
 
     // extract relevant sum column
-    r7_sums = map(my_marks in r5_candidates, sum(mark in my_marks[dance][""], mark if mark <= by_place | 0)),
+    r7_sums = map(
+        my_marks in r5_candidates,
+        sum(d in dances, sum(mark in my_marks[d][""], mark if mark <= by_place | 0))
+    ),
     // report sums considered
     report_sums = map(
         my_sum in r7_sums,
@@ -332,5 +340,5 @@ where
     // add hint for use within skating
     my_reason  = reason if dance | "R11 -> {reason}";
     // explain averaging only if applied -- not used in skating, since no place-val computed there
-    avg_reason = "Rule 7d: average of {place-min}..{place_max}" if place_min != place_max | "";
+    avg_reason = "R7d: average of {place-min}..{place_max}" if place_min != place_max | "";
 // assign_place

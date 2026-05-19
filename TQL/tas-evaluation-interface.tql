@@ -5,10 +5,8 @@
 
 # Set up empty tables for input (marks) and output (report)
 FUNCTION prepare_interface():
-
-    # generate marks table [IN]
-    DROP   TABLE marks IF NOT EXISTS;
-    CREATE TABLE marks;
+    # marks table [IN]
+    GLOBAL marks = CREATE TABLE;
     ADD COLUMN start                DECIMAL                 TO TABLE marks;
     ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE marks;
     ADD COLUMN round_element        TEXT    DEFAULT NULL    TO TABLE marks;
@@ -16,9 +14,8 @@ FUNCTION prepare_interface():
     ADD COLUMN adjudicator          TEXT    DEFAULT NULL    TO TABLE marks;
     ADD COLUMN value                DECIMAL                 TO TABLE marks;
 
-    # generate report table [OUT]
-    DROP   TABLE report IF EXISTS;
-    CREATE TABLE report;
+    # report table [OUT]
+    GLOBAL report = CREATE TABLE;
     ADD COLUMN start                DECIMAL                 TO TABLE report;
     # the following columns are optional hierarchical (group-)keys    
     ADD COLUMN round                TEXT    DEFAULT NULL    TO TABLE report;
@@ -31,6 +28,7 @@ FUNCTION prepare_interface():
     ADD COLUMN value                DECIMAL                 TO TABLE report;
     ADD COLUMN reason               TEXT    DEFAULT NULL    TO TABLE report;
 
+    # round is used to indicate the round subject to evaluation
+    # (to support access to marks from earlier rounds, if needed)
+    GLOBAL round  = NULL;
 # prepare_interface()
-
-

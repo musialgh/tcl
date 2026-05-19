@@ -52,13 +52,15 @@ Hier eine semi-formale Sprachdefinition von TQL,
     - bis zum Ende des Funktionsrumpfs, in dem IMPORT steht, oder
     - für den Rest der Datei, falls IMPORT außerhalb aller Funktionsrümpfe steht
   - es wird empfohlen, `IMPORT` nur im *externen Code* am Beginn einer TQL-Datei zu verwenden
-- `EXECUTE <file-path>`
-  - bricht die Ausführung der aktuellen TQL-Datei ab und
-  - setzt die Ausführung mit dem Top-Level-Code in der TQL-Datei *file-path* fort
-  - alle globalen Variablen-Bindungen bleiben erhalten
-- `LOAD TABLE <table-name> FROM <csv-path>`
-  - lädt eine Tabelle aus einer CSV-Datei und macht sie als *table-name* immer *global* sichtbar
-  - Dateiformat siehe `SAVE-TABLE`
+- 
+  - macht die aufgeführten Bezeichner aus dem *globalen Scope* sichtbar
+    - innerhalb der aktuellen Funktion
+    - unterhalb der Direktive
+  - darf nicht im *globalen Code* stehen
+  - alle aufgeführten Bezeichner müssen bereits im *globalen Scope* erstellt worden sein
+- `GLOBAL <identifier> = <expression>`
+  - definiert und initialisiert eine Variable im *globalen Scope*
+  - sofern ein gleichnamiges globales Objekt schon existiert, wird es stillschweigend ersetzt
 - `SAVE TABLE <table-name> INTO <csv-path>`
   - sichert eine einzelne Tabelle in eine CSV-Datei
   - Ausgabe-Format:
@@ -69,15 +71,22 @@ Hier eine semi-formale Sprachdefinition von TQL,
     - alle folgenden Zeilen enthalten jeweils eine Daten-Zeile
 - `FUNCTION <function-name>({<param-name>[,]}*{[<param-name> = <default-value>][,]}*):`
   - definiert eine Benutzer-Funktion
-  - Basis-Typen (DECIMAL, STRING, NULL) werden als Wert übergeben
-  - alle Tabellen-Objekte werden als Referenz übergeben
-    - eine Übergabe als Wert kann die Funktion simulieren, indem der Parameter mit LET in eine neue Variable kopiert wird
-- `CALL <function-name>({[param-name> = ]<param-value>[,]}*)`
+  - für die Parameter wird nur die `[in]`-Semantik unterstützt
+    - der Interpreter darf Objekte technisch als Wert oder Referenz übergeben
+    - wenn der Funktionrumpf mit `LET` einen Parameter überschreibt,
+      hat dies garantiert keine Auswirkungen auf das vom Aufrufer übergebene Objekt
+      - im Falle einer Übergabe als Referenz wird dazu automatisch eine neue Bindung
+        im Scope der Funktion gebildet
+    - Tabellen-Objekte sollen aus Effizienzgründen wenn möglich als Referenz übergeben werden
+  - komplexere Funktionsergebnisse sind zu realisieren über
+    - ein Tabellen-Objekt als Rückgabewert, oder
+    - Schreiben auf globale(s) Tabellen-Objekt(e) (im Sinne einer "Datenbank")
+- `CALL <function-name>({<param-value> [AS <param-name>][,]}*)`
   - ruft benutzerdefinierte oder eingebaute Funktion *function-name* auf
   - Rückgabewert wird ignoriert
 - `RETURN [<expression>]`
   - optional für Funktionen ohne Rückgabewert
-  - ohne Rückgabewert liefert die Funktion NULL an den Aufrufer
+  - ohne Rückgabewert liefert eine Funktion NULL an den Aufrufer
 - `ABORT <error-message>`
   - bricht den TQL-Interpreter wegen eines internen/unbehebbaren Fehlers ab
 - `LET <identifier> = <expression>`
@@ -102,8 +111,6 @@ Hier eine semi-formale Sprachdefinition von TQL,
   - eine Quell-Zeile ohne Match in der Ziel-Tabelle führt zum Abbruch
   - wenn es mehr als einen Match pro Quell-Zeile gibt, werden *alle* davon betroffenen Ziel-Zeilen geändert
   - Hinweis: mit CONCAT TO können die meisten verbleibenden Use-Cases von JOIN in Standard-SQL gelöst werden
-- `CREATE TABLE <table-name> [IF NOT EXISTS]`
-- `DROP TABLE <table-name> [IF NOT EXISTS]`
 - `ADD COLUMN <column-name> {GUID|{DECIMAL|TEXT} [DEFAULT <value>]} TO TABLE <table> [IF NOT EXISTS]`
   - Spalten vom Typ GUID in einer neuen Zeile werden automatisch mit einer zufälligen ID versehen
 
@@ -127,9 +134,9 @@ Hier eine semi-formale Sprachdefinition von TQL,
   - nur neue Zeilen
   - liefert eine Tabellenspalte mit der Spalte der Ziel-Tabelle für alle neuen Zeilen zurück
   - darf auch als Direktive genutzt werden
-- `ROW({[<column-name> = ]<expression>[,]}+)`
+- `ROW({<expression>[AS <column-name>][,]}+)`
   - liefert eine Tabellenzeile mit den aufgeführten Spaltenname-Wert-Paaren zurück
-  - wenn *expression* ein einzelner Bezeichner ist und dem Spaltennamen entspricht, kann *column-name* entfallen
+  - wenn *expression* ein einzelner Bezeichner ist und der Spaltenname fehlt, wird der Bezeichner auch als Spaltenname verwendet
   - Datentypen werden automatisch übernommen
   - DEFAULT für alle Spalten außer vom Typ GUID ist NULL
   - Hinweis: insbesondere nutzbar als *source-row* in UPDATE … SET
@@ -139,11 +146,21 @@ Hier eine semi-formale Sprachdefinition von TQL,
   - Index-Bereich für die Daten-Zeilen ist 1..n
 - `<table-expression>.<column-name>`
   - liefert die ganze selektierte Spalte
+- `CREATE TABLE`
+  - liefert eine neue leere Tabelle
+  - da Tabellen-Objekte demselben Scoping unterliegen wie skalare Werte,
+    wird der "Name" der neuen Tabelle ggf. durch eine `LET`-Direktive vergeben
+- `LOAD TABLE FROM <csv-path>`
+  - lädt eine Tabelle aus einer CSV-Datei
+  - Dateiformat siehe `SAVE-TABLE`
+  - Hinweis zum "Namen" siehe `CREATE TABLE`
 
 **expression**:
 - `<table-expression>`
-  - wenn die resultierende Tabelle genau eine Spalte und eine Spalte enthält, wird das Resultat als ein skalarer Wert behandelt
-  - dies ist besonders zu beachten, wenn das Resultat später als Funktionsparameter verwendet wird
+  - wenn die resultierende Tabelle genau eine Spalte und eine Spalte enthält, 
+    kann das Resultat auch überall verwendet werden, wo ein skalarer Wert erwartet wird
+  - falls TQL für ein Tabellen-Objekt in diesem Fall ein anderes Verhalten 
+    vorschreibt als für einen skaleren Wert, gilt die Regel für ein Tabellenobjekt
 - `NULL`
 - `FALSE`
   - equal to 0
@@ -164,7 +181,7 @@ Hier eine semi-formale Sprachdefinition von TQL,
 - unäre Operatoren: `NOT`, `-`, `+`, `<value> IS [NOT] NULL`
 - binäre Operatoren: `=`, `<>`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `AND`, `OR`, `XOR`
 - `(<expression>)`
-- `<function-name>({[param-name> = ]<param-value>[,]}*)`
+- `<function-name>({<param-value> [AS <param-name>][,]}*)`
   - wertet benutzerdefinierte oder eingebaute Funktion *function-name* aus
 
 **select-expression** (zusätzliche Terme):
@@ -172,7 +189,7 @@ Hier eine semi-formale Sprachdefinition von TQL,
 - `<group-function>`
 
 **where-condition** (zusätzliche Terme):
-- `<column-name> IN <column-expression>`
+- `<column-name> [NOT] IN <column-expression>`
   - *column-expression* muss ein Tabellen-Ausdruck mit genau einer Spalte sein
     - wird *nicht* im Kontext der im SELECT verwendeten Tabelle ausgewertet
     - Spaltenname wird nicht beachtet
@@ -213,14 +230,14 @@ Hier eine semi-formale Sprachdefinition von TQL,
 ## Scopes und Ausführung
 
 - TQL-Code außerhalb aller Funktionsrümpfe heißt *globaler Code* und wird ausgeführt
-  - beim Interpreter-Start für die aktuelle Datei, oder
-  - wenn die aktuelle Datei mit `EXECUTE` aufgerufen wurde
-- alle in *globalen Code* mit `LET` definierten Variablen sind nach ihrer Definition sichtbar (**globaler Scope**)
-  - für *globalen Code* unterhalb der Definition 
-  - für alle Funktionen nach der Definition aufgerufenen Funktionen
-    - inklusive solcher, die mit IMPORT importiert wurden
-- in Funktionsrümpfen mit `LET` definierte Variablen heißen *lokale Variablen* und sind sichtbar (**lokaler Scope**)
+  - beim Interpreter-Start für die aktuelle Datei
+- `LET` im *globalen Code* definiert und ändert Variablen, die sichtbar sind (**globaler Scope**):
+  - im *globalen Code*, der nach der Definition ausgeführt wird
+  - für alle nach der Definition aufgerufenen Funktionen, die sie `GLOBAL` in ihren *lokalen Scope* importieren
+- in Funktionsrümpfen mit `LET` definierte Variablen heißen *lokale Variablen* und sind sichtbar (**lokaler Scope**):
   - im definierenden Funktionsrumpf unterhalb der Definition
+- Funktionsrümpfe können Variablen im globalen Scope anlegen und gleichzeitig sichtbar machen, 
+  wenn sie `GLOBAL <name> = ...` nutzen
 
 ## Tabellen und Indizierung
 
