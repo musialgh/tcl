@@ -86,6 +86,42 @@ Always use `tc.ColName` for the column name and `tc.Col` for error positions.
 `ContainsAgg(ExprNode)` recursively checks whether an expression tree contains
 any SQL aggregate call.
 
+## GROUP BY alias resolution
+
+`GroupRows` takes `List<Func<int, TqlValue>>` key functions, not column name
+strings.  `EvalSelect` builds these functions before calling `GroupRows`:
+
+- If the GROUP BY name matches a SELECT alias → evaluate that alias's expression
+  per source row.
+- Otherwise → read the column from the source table directly.
+
+This lets `GROUP BY dance` work when `dance` is a SELECT alias for
+`round_element` and does not exist as a source column.
+
+## ROW expressions
+
+`EvalRow` derives default column names via `DefaultColName(ExprNode, int)`:
+
+- `TableColumn tc` → `tc.ColName` (e.g. `s.start` → column named `start`)
+- `IdentExpr ie` → `ie.Name`
+- anything else → `col_<index>`
+
+`EvalRow` also applies `AutoScalar` to every field value.  This ensures that
+a 1×1 table projection like `placing.place_min` (a 1-row SELECT result) becomes
+a scalar when placed into a ROW field.  Do **not** apply `AutoScalar` inside
+`EvalTableColumn` for column projections — that breaks cases like
+`LET candidates = scores.start` where the single-column table must stay a
+table for the next `IN candidates` predicate.
+
+## Numeric subscript syntax — `table[n]`
+
+`FinishExpr` (Parser) handles `BracketIdent` tokens whose text is a decimal
+integer as `TableIndex` nodes.  This covers `scores[1]`, which the lexer
+tokenises as `BracketIdent("1")` because `[` always starts a bracketed token.
+`TableIndex` evaluation returns `RowValAt(rid)` for n ≥ 1 and a column-name
+`RowVal` for n = 0.  `.col` chained after `[n]` then hits the `RowVal` branch
+of `EvalTableColumn` and returns the scalar directly.
+
 ## FOR IN iteration
 
 - Source is a `TableColumn` (e.g. `scores.start`) or a single-column table
@@ -125,6 +161,31 @@ the CSV receive their declared `DEFAULT`.  Existing rows are discarded before lo
 
 | File | Status | Notes |
 |------|--------|-------|
-| `tas-evaluation-interface.tql` | reference | defines `prepare_interface()` |
+| `tas-evaluation-interface.tql` | reference | defines `prepare_interface_output/input()` |
 | `cross-majority-skating.tql` | reference | full CMS adjudication logic |
+| `run-cms-finale.tql` | test entry point | calls `evaluate_round_final(TRUE)` |
+| `run-cms-elimination.tql` | test entry point | calls `evaluate_round_elimination()` |
 | `final_round.tql` | **outdated** | no WHEN syntax, no `{ col = val }` ROW in interpreter |
+
+## Test data and runner
+
+```
+test-data/cms-finale-marks.csv            ← 150 rows (6 starts × 5 dances × 5 judges)
+test-data/cms-elimination-marks.csv       ← same marks, places 1-3 → 1 (cross), 4-6 → 0
+test-data/cms-finale-report.expected.csv  ← snapshot for finale test
+test-data/cms-elimination-report.expected.csv ← snapshot for elimination test
+```
+
+Run with:
+```bash
+python3 run_tests.py            # auto-builds if dll missing
+python3 run_tests.py --build    # force rebuild first
+python3 run_tests.py finale     # filter by name
+```
+
+To update a snapshot after an intentional output change:
+```bash
+dotnet run --project interpreter/TqlInterpreter.csproj -c Release --no-build -- \
+  run-cms-finale.tql -r test-data/cms-finale-marks.csv -i marks \
+  -w test-data/cms-finale-report.expected.csv -o report
+```
