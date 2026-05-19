@@ -4,11 +4,11 @@ const path = require('path');
 let client;
 
 function activate(context) {
-    const proj = path.join(__dirname, '..', 'tql-lsp.csproj');
+    const serverBin = path.join(__dirname, 'server', 'tql-lsp');
 
     const serverOptions = {
-        command: 'dotnet',
-        args: ['run', '--project', proj, '-c', 'Release'],
+        command: serverBin,
+        args: [],
         transport: TransportKind.stdio
     };
 

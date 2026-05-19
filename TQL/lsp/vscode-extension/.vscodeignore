@@ -1,0 +1,4 @@
+**/.gitignore
+**/.vscodeignore
+node_modules/@vscode/
+server/tql-lsp.pdb
