@@ -1,0 +1,194 @@
+using TqlInterpreter;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+static void Die(string msg) { Console.Error.WriteLine($"tql: {msg}"); Environment.Exit(1); }
+
+/// <summary>Drain all blank-line-separated tables from a reader until EOF.</summary>
+static List<Table> ReadAllTables(TextReader rdr)
+{
+    var result = new List<Table>();
+    Table? t;
+    while ((t = CsvIO.ReadTable(rdr)) is not null) result.Add(t);
+    return result;
+}
+
+// ── argument parsing ──────────────────────────────────────────────────────────
+
+if (args.Length == 0)
+{
+    Console.Error.WriteLine("usage: tql <script> {[-r <file>] -i <table>} {[-w <file>] -o <table>}");
+    Environment.Exit(1);
+}
+
+string scriptPath = args[0];
+
+var inputs  = new List<InputSpec>();
+var outputs = new List<OutputSpec>();
+
+string? pendingRead  = null;   // last -r value awaiting -i
+string? pendingWrite = null;   // last -w value awaiting -o
+
+for (int a = 1; a < args.Length; a++)
+{
+    switch (args[a])
+    {
+        case "-r":
+            if (++a >= args.Length) Die("-r requires a file argument");
+            pendingRead = args[a] == "-" ? null : args[a];
+            break;
+
+        case "-i":
+            if (++a >= args.Length) Die("-i requires a table name");
+            inputs.Add(new InputSpec(args[a], pendingRead));
+            pendingRead = null;
+            break;
+
+        case "-w":
+            if (++a >= args.Length) Die("-w requires a file argument");
+            pendingWrite = args[a] == "-" ? null : args[a];
+            break;
+
+        case "-o":
+            if (++a >= args.Length) Die("-o requires a table name");
+            outputs.Add(new OutputSpec(args[a], pendingWrite));
+            pendingWrite = null;
+            break;
+
+        default:
+            Die($"unknown argument '{args[a]}'");
+            break;
+    }
+}
+
+// ── resolve script path ───────────────────────────────────────────────────────
+
+if (!File.Exists(scriptPath))
+{
+    var withExt = scriptPath.EndsWith(".tql", StringComparison.OrdinalIgnoreCase)
+        ? scriptPath : scriptPath + ".tql";
+    if (File.Exists(withExt)) scriptPath = withExt;
+    else Die($"script not found: {scriptPath}");
+}
+
+string scriptDir = Path.GetDirectoryName(Path.GetFullPath(scriptPath)) ?? ".";
+
+// ── read input tables ─────────────────────────────────────────────────────────
+
+// Group input specs by source file so multiple tables from the same file
+// are read sequentially from one stream (blank-line separated).
+var stdinNames    = new List<string>();                                         // inputs from stdin
+var fileNames     = new Dictionary<string, List<string>>(StringComparer.Ordinal); // inputs from file
+foreach (var inp in inputs)
+{
+    if (inp.FilePath is null)
+        stdinNames.Add(inp.TableName);
+    else
+    {
+        if (!fileNames.TryGetValue(inp.FilePath, out var names))
+            fileNames[inp.FilePath] = names = new List<string>();
+        names.Add(inp.TableName);
+    }
+}
+
+var openReaders = new Dictionary<string, StreamReader>(StringComparer.Ordinal);
+TextReader? stdinReader = null;
+TextReader GetStdin() => stdinReader ??= new StreamReader(Console.OpenStandardInput());
+
+var tableMap = new Dictionary<string, Table>(StringComparer.Ordinal);
+
+if (stdinNames.Count > 0)
+{
+    var tables = ReadAllTables(GetStdin());
+    for (int i = 0; i < stdinNames.Count; i++)
+    {
+        if (i >= tables.Count)
+            Die($"expected table '{stdinNames[i]}' but stdin contained only {tables.Count} table(s)");
+        tableMap[stdinNames[i]] = tables[i];
+    }
+}
+
+foreach (var (filePath, names) in fileNames)
+{
+    TextReader rdr = openReaders.TryGetValue(filePath, out var existing)
+        ? existing
+        : openReaders[filePath] = new StreamReader(filePath);
+
+    var tables = ReadAllTables(rdr);
+
+    for (int i = 0; i < names.Count; i++)
+    {
+        if (i >= tables.Count)
+            Die($"expected table '{names[i]}' but file '{filePath}' contained only {tables.Count} table(s)");
+        tableMap[names[i]] = tables[i];
+    }
+}
+
+foreach (var (_, rdr) in openReaders) rdr.Dispose();
+
+// ── set up executor and load input tables into global scope ───────────────────
+
+var global   = new GlobalScope();
+var executor = new Executor(global, scriptDir);
+
+foreach (var (name, table) in tableMap)
+    global.Variables[name] = new TableVal(table);
+
+// ── execute the script ────────────────────────────────────────────────────────
+
+try
+{
+    executor.ExecuteFile(scriptPath);
+}
+catch (TqlAbortException ex)
+{
+    Console.Error.WriteLine($"ABORT: {ex.Message}");
+    Environment.Exit(2);
+}
+catch (TqlRuntimeException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    Environment.Exit(3);
+}
+catch (TqlParseException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    Environment.Exit(4);
+}
+
+// ── write output tables ───────────────────────────────────────────────────────
+
+var openWriters = new Dictionary<string, StreamWriter>(StringComparer.Ordinal);
+TextWriter? stdoutWriter = null;
+TextWriter GetStdout() => stdoutWriter ??= new StreamWriter(Console.OpenStandardOutput());
+
+foreach (var spec in outputs)
+{
+    if (!global.Variables.TryGetValue(spec.TableName, out var val))
+        Die($"output table '{spec.TableName}' is not defined after script execution");
+
+    if (val is not TableVal tv)
+    {
+        Die($"'{spec.TableName}' is not a table (got {val!.GetType().Name})");
+        continue;
+    }
+
+    TextWriter wtr = spec.FilePath is null
+        ? GetStdout()
+        : openWriters.TryGetValue(spec.FilePath, out var existing)
+            ? existing
+            : openWriters[spec.FilePath] = new StreamWriter(spec.FilePath);
+
+    CsvIO.WriteTable(tv.T, wtr);
+}
+
+stdoutWriter?.Flush();
+foreach (var (_, wtr) in openWriters) { wtr.Flush(); wtr.Dispose(); }
+
+// ── support types ─────────────────────────────────────────────────────────────
+
+/// <summary>One scheduled table read: table name → source file path (null = stdin).</summary>
+record InputSpec (string TableName, string? FilePath);
+
+/// <summary>One scheduled table write: table name → destination file path (null = stdout).</summary>
+record OutputSpec(string TableName, string? FilePath);
