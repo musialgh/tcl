@@ -128,3 +128,6 @@ great! pretty close. Some improvements needed:
 ** these value columns shall be sorted according to ki+1, where
 *** numerical keys (integers) shall be sorted numerically ascending
 *** textual keys shall be sorted in the order of their first occurrence in the csv input ("chronologically")
+
+Bugs:
+* csv pathes (at least) interpreted relative to TQL dir
