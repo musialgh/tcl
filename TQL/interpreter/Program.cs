@@ -15,16 +15,49 @@ static List<Table> ReadAllTables(TextReader rdr)
 
 // ── argument parsing ──────────────────────────────────────────────────────────
 
+const string Help = """
+usage: tql <script> {[-r <file>] -i <table>} {[-w <file>] -o <table>} [-b]
+
+  <script>            TQL script file to execute (.tql extension optional)
+
+  Input (may be repeated):
+    -r <file>         Read next input table(s) from <file> instead of stdin
+                      ('-' resets to stdin)
+    -i <table>        Assign the next read to global table <table>
+                      Multiple blank-line-separated tables in one file are
+                      assigned to consecutive -i names.
+
+  Output (may be repeated):
+    -w <file>         Write next output table to <file> instead of stdout
+                      ('-' resets to stdout)
+    -o <table>        Write global table <table> to the current output target
+
+  -b, --browse        Open each -w output file with xdg-open after writing
+  -h, --help          Show this help and exit
+
+Examples:
+  tql script.tql -r input.csv -i marks -w report.csv -o report
+  tql script.tql -i marks -o report                    # stdin / stdout
+  tql script.tql -r a.csv -i t1 -r b.csv -i t2 -o out # two input files
+""";
+
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("usage: tql <script> {[-r <file>] -i <table>} {[-w <file>] -o <table>}");
+    Console.Error.WriteLine(Help);
     Environment.Exit(1);
 }
 
 string scriptPath = args[0];
 
+if (scriptPath is "-h" or "--help")
+{
+    Console.WriteLine(Help);
+    Environment.Exit(0);
+}
+
 var inputs  = new List<InputSpec>();
 var outputs = new List<OutputSpec>();
+bool browse = false;
 
 string? pendingRead  = null;   // last -r value awaiting -i
 string? pendingWrite = null;   // last -w value awaiting -o
@@ -33,6 +66,11 @@ for (int a = 1; a < args.Length; a++)
 {
     switch (args[a])
     {
+        case "-h": case "--help":
+            Console.WriteLine(Help);
+            Environment.Exit(0);
+            break;
+
         case "-r":
             if (++a >= args.Length) Die("-r requires a file argument");
             pendingRead = args[a] == "-" ? null : args[a];
@@ -53,6 +91,10 @@ for (int a = 1; a < args.Length; a++)
             if (++a >= args.Length) Die("-o requires a table name");
             outputs.Add(new OutputSpec(args[a], pendingWrite));
             pendingWrite = null;
+            break;
+
+        case "-b": case "--browse":
+            browse = true;
             break;
 
         default:
@@ -184,6 +226,12 @@ foreach (var spec in outputs)
 
 stdoutWriter?.Flush();
 foreach (var (_, wtr) in openWriters) { wtr.Flush(); wtr.Dispose(); }
+
+if (browse)
+{
+    foreach (var path in openWriters.Keys)
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", path) { UseShellExecute = false });
+}
 
 // ── support types ─────────────────────────────────────────────────────────────
 
