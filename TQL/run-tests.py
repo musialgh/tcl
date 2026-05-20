@@ -5,9 +5,9 @@ Builds the interpreter once, runs each test case, and compares output
 line-by-line against the stored expected CSV.
 
 Usage:
-    python3 run_tests.py          # run all tests
-    python3 run_tests.py --build  # force rebuild before running
-    python3 run_tests.py <name>   # run only tests whose name contains <name>
+    python3 run-tests.py          # run all tests
+    python3 run-tests.py --build  # force rebuild before running
+    python3 run-tests.py <name>   # run only tests whose name contains <name>
 """
 
 import subprocess
@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 PROJ = ROOT / "interpreter" / "TqlInterpreter.csproj"
-TQL  = ["dotnet", "run", "--project", str(PROJ), "-c", "Release", "--no-build", "--"]
+TQL  = ["dotnet", "run", "--project", str(PROJ), "--no-build", "--"]
 
 TESTS = [
     {
@@ -53,7 +53,7 @@ def check(name: str, ok: bool, detail: str = ""):
 def build():
     print("Building interpreter...")
     r = subprocess.run(
-        ["dotnet", "build", str(PROJ), "-c", "Release", "--nologo", "-v", "quiet"],
+        ["dotnet", "build", str(PROJ), "--nologo", "-v", "quiet"],
         capture_output=True, text=True
     )
     if r.returncode != 0:
