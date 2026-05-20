@@ -170,7 +170,7 @@ _CSS = """\
   table { border-collapse: collapse; }
   th, td { border: 1px solid #aaa; padding: 3px 7px; white-space: nowrap; }
   th    { background: #e4e8ee; text-align: center; vertical-align: bottom; }
-  td.rk { font-weight: bold; }
+  td.rk { font-weight: bold; text-align: center; }
   td.v  { text-align: right; cursor: default; }
   td.v:hover { background: #fffacc; }
   td.v:empty { background: #f7f7f7; }"""
