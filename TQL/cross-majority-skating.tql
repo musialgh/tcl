@@ -75,7 +75,7 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
     LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
     LET max_marks  = ROWS(marks) / ROWS(starts);        # for majority check: marks per start
     LET group      = IF(dance, NULL, "R11-criteria");   # group header for count/sum reporting
-    LET prefix     = IF(dance, '',   'R11,        ');   # reason prefix for report entries
+    LET prefix     = IF(dance, '',   'R11, '       );   # reason prefix for report entries
 
     FOR by_place IN min_by_place .. ROWS(starts): # place where counts and sums are read from (decreasing priority)
 
