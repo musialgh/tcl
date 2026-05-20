@@ -117,3 +117,14 @@ I now need a simple converter in python to generate an HTML table with hierarchi
 ** sample output (same final input, btw) tcl/tests/t.html
 ** in the script, the solution for removing horizontal lines around unused key cells in the head might be stupid. Can we use rowspan instead?
 
+great! pretty close. Some improvements needed:
+* I forgot to tell you that the 'key' column (in fact, col n-3) is also special:
+** it must be filled for each row (convention)
+** therefore, rowspan's can always stretch upward from a filled header cell
+** ideally, text in rowspan'ned cells should be vertically aligned exactly as in neighbouring elementary cells
+   -- maybe via vertically align to bottom via style (or similar)?
+* please revisit column sorting:
+** all values with common path prefix k1-...-ki shall be within the same colspan group for in level i
+** these value columns shall be sorted according to ki+1, where
+*** numerical keys (integers) shall be sorted numerically ascending
+*** textual keys shall be sorted in the order of their first occurrence in the csv input ("chronologically")

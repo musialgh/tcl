@@ -167,7 +167,7 @@ FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, valu
 
     # report r10 application
     LET apply_r10 = SELECT start, round AS round, "R10-applied" AS group, for_place AS subgroup, "X" AS value,
-                           "R9b: sum {scores[1].sum} tie on place {for_place}" AS reason FROM scores;
+                           "R9b: places sum {scores[1].sum} tie for place {for_place}" AS reason FROM scores;
     INSERT INTO report VALUES apply_r10;
     # fetch counts and sums better or equal target place
     LET scores = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM report
@@ -182,7 +182,7 @@ FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, valu
     # try to resolve on count
     IF ROWS(scores) = 1:
         RETURN assign_place(scores.start, NULL AS dance, for_place,
-                            "R10a,b: highest count {scores.num} on place {for_place}");
+                            "R10a,b: highest count {scores.num} on all places {for_place} or better");
 
     # report sums considered
     CALL report_sum(scores, NULL AS dance, "R10-criteria" AS group, for_place, "R10c,d for place {for_place}");
@@ -191,11 +191,11 @@ FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, valu
     # try to resolve on sum
     IF ROWS(scores) = 1:
         RETURN assign_place(scores.start, NULL AS dance, for_place,
-                            "R10c,d: lowest sum {scores.sum} on place {for_place}");
+                            "R10c,d: lowest sum {scores.sum} on all places {for_place} or better");
 
     # report r11 application
     LET apply_r11 = SELECT start, round AS round, "R11-applied" AS group, for_place AS subgroup, "X" AS value, 
-                           "R10e: sum {scores[1].sum} tie on place {for_place}" AS reason FROM scores;
+                           "R10e: sum {scores[1].sum} tie on all places {for_place} or better" AS reason FROM scores;
     INSERT INTO report VALUES apply_r11;
     # invoke rules 5 to 8, taking TSO Appendix 2 sort of literally
     CALL refine_counts_and_sums(marks, scores.start, NULL AS dance, for_place AS min_by_place);
