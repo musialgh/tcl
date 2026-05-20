@@ -111,6 +111,16 @@ def build_data(rows: list, n: int) -> OrderedDict:
     return data
 
 
+def sort_data(data: OrderedDict) -> OrderedDict:
+    """Sort row keys: integer keys numerically, textual keys alphabetically."""
+    def row_key(k):
+        try:
+            return (0, int(k))
+        except ValueError:
+            return (1, k)
+    return OrderedDict((k, data[k]) for k in sorted(data, key=row_key))
+
+
 # ── header construction ────────────────────────────────────────────────────────
 
 def build_header(paths: list) -> list:
@@ -252,6 +262,7 @@ def main():
     raw_paths   = collect_paths(rows, n)    # first-occurrence order (sort baseline)
     paths       = sort_paths(raw_paths)     # numeric asc / textual by occurrence
     data        = build_data(rows, n)
+    data        = sort_data(data)           # sort row keys same way
     header_rows = build_header(paths)
 
     out = generate_html(title, headers[0], header_rows, paths, data)
