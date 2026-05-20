@@ -189,14 +189,14 @@ test-data/cms-elimination-report.expected.csv ← snapshot for elimination test
 
 Run with:
 ```bash
-python3 run_tests.py            # auto-builds if dll missing
-python3 run_tests.py --build    # force rebuild first
-python3 run_tests.py finale     # filter by name
+python3 run-tests.py            # auto-builds if dll missing
+python3 run-tests.py --build    # force rebuild first
+python3 run-tests.py finale     # filter by name
 ```
 
 To update a snapshot after an intentional output change:
 ```bash
-dotnet run --project interpreter/TqlInterpreter.csproj -c Release --no-build -- \
+dotnet run --project interpreter/TqlInterpreter.csproj --no-build -- \
   run-cms-finale.tql -r test-data/cms-finale-marks.csv -i marks \
   -w test-data/cms-finale-report.expected.csv -o report
 ```
