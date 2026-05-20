@@ -75,6 +75,7 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
     LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
     LET max_marks  = ROWS(marks) / ROWS(starts);        # for majority check: marks per start
     LET group      = IF(dance, NULL, "R11-criteria");   # group header for count/sum reporting
+    LET prefix     = IF(dance, '',   'R11,        ');   # reason prefix for report entries
 
     FOR by_place IN min_by_place .. ROWS(starts): # place where counts and sums are read from (decreasing priority)
 
@@ -87,13 +88,13 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
         IF NOT ROWS(scores): CONTINUE;
 
         # report counts considered
-        CALL report_count(scores, dance, group, by_place, "R5,6 for places {by_place} and better");
+        CALL report_count(scores, dance, group, by_place, "{prefix}R5,6 for places {by_place} and better");
         # fetch best-count occurrences among candidates
         LET scores = SELECT * FROM scores ORDER BY num DESC LIMIT 1 ON DISTINCT num;
         # try to resolve on count
         IF ROWS(scores) = 1:
             RETURN assign_place(scores.start, dance, for_place,
-                                "R5,6,8: highest majority count {scores.num} on place {by_place}");
+                                "{prefix}R5,6,8: highest majority count {scores.num} on place {by_place}");
 
         # report sums considered
         CALL report_sum(scores, dance, group, by_place, "R7 for places {by_place} and better");
@@ -102,7 +103,7 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
         # try to resolve on sum
         IF ROWS(scores) = 1:
             RETURN assign_place(scores.start, dance, for_place,
-                                "R7a,b: highest majority count {scores.num} "
+                                "{prefix}R7a,b: highest majority count {scores.num} "
                                 "with lowest sum {scores.sum} on place {by_place}");
 
         # restrict tie to consider for next iteration
@@ -110,7 +111,7 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
 
     # criteria exhausted: share place for remaining candidates
     CALL assign_place(candidates, dance, for_place,
-                        "R7c: shared majority counts and sums on places {min_by_place} and below");
+                        "{prefix}R7c: shared majority counts and sums on places {min_by_place} and below");
 # refine_counts_and_sums()
 
 
@@ -214,8 +215,6 @@ FUNCTION assign_place(starts,       # table (start) to process, subset of <unpla
     LET place_max = place_min + ROWS(starts) - 1;
     # drop starts we just assigned
     LET unplaced = SELECT * FROM unplaced WHERE unplaced.start NOT IN starts;
-    # extend reason for R11 application
-    IF dance IS NULL: LET reason = "R11, {reason}";
     # add placings to report
     FOR start IN starts:
         INSERT INTO report VALUES ROW(start, round, dance AS round_element, 'place_min' AS key, place_min AS value, reason);
@@ -224,7 +223,7 @@ FUNCTION assign_place(starts,       # table (start) to process, subset of <unpla
         IF dance IS NOT NULL:
             INSERT INTO report VALUES 
                 ROW(start, round, dance AS round_element, 'place_val' AS key, (place_min + place_max) / 2 AS value, 
-                    IF(place_min = place_max, NULL, "R7d: average of {place_min}..{place_max}") AS reason);
+                    IF(place_min = place_max, reason, "R7d: average of {place_min}..{place_max}") AS reason);
 # assign_place()
 
 

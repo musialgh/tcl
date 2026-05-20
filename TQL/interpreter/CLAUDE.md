@@ -146,6 +146,17 @@ _rows[rid] = arr;
 (`BreakSignal`, `ContinueSignal`, `ReturnSignal`) that are caught by the
 corresponding loop / function executor.  They must never escape the interpreter.
 
+## Table.RowCount vs. physical rows
+
+`Table.RowCount` returns `_sortOrder.Count` (logical visible rows), **not** `_rows.Count` (physical rows).
+
+`ApplyLimit` calls `SetSortOrder(keep)` which shrinks `_sortOrder` to only the kept rows, but
+`_rows` retains all physically inserted rows.  If `RowCount` returned `_rows.Count`, then
+`ROWS(t)` after a `LIMIT` clause would return the pre-limit row count, breaking `IF ROWS(t) = 1`
+comparisons.
+
+Never change `RowCount` back to `_rows.Count`.
+
 ## LOAD TABLE (two forms)
 
 | Form | What it does |

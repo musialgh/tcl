@@ -158,7 +158,7 @@ public class Table
     // ── schema ──────────────────────────────────────────────────────────────
 
     public int ColumnCount => ColumnList.Count;
-    public int RowCount    => _rows.Count;
+    public int RowCount    => _sortOrder.Count;
 
     private string[] _colNames = [];
     public IReadOnlyList<string> ColumnNames => _colNames;
