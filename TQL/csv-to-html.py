@@ -26,6 +26,7 @@ Usage:
 import argparse
 import csv
 import html
+import subprocess
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -233,7 +234,12 @@ def main():
                     help='Output HTML file (default: stdout)')
     ap.add_argument('-t', '--title', default=None,
                     help='Page/table title (default: input filename stem)')
+    ap.add_argument('-b', '--browse', action='store_true',
+                    help='Open the output file in the default browser (requires -o)')
     args = ap.parse_args()
+
+    if args.browse and not args.output:
+        ap.error('--browse requires --output')
 
     title = args.title or (Path(args.input).stem if args.input != '-' else 'TQL Report')
 
@@ -252,6 +258,8 @@ def main():
 
     if args.output:
         Path(args.output).write_text(out, encoding='utf-8')
+        if args.browse:
+            subprocess.Popen(['xdg-open', args.output])
     else:
         print(out)
 
