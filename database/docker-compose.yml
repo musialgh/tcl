@@ -8,6 +8,11 @@ services:
     volumes:
       - azimutt_db:/var/lib/postgresql/data
 
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"
+
   azimutt:
     image: ghcr.io/azimuttapp/azimutt:main
     ports:
@@ -20,9 +25,16 @@ services:
       DATABASE_URL: "postgresql://azimutt:azimutt@db/azimutt"
       FILE_STORAGE_ADAPTER: local
       AUTH_PASSWORD: "true"
-      ORGANIZATION_DEFAULT_PLAN: team
+      ORGANIZATION_DEFAULT_PLAN: enterprise
+      EMAIL_ADAPTER: smtp
+      SMTP_RELAY: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SENDER_EMAIL: azimutt@localhost
     depends_on:
       - db
+      - mailpit
 
 volumes:
   azimutt_db:
