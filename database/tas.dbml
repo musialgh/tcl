@@ -1,0 +1,593 @@
+// TAS database model draft for dbdiagram.io
+//
+// Current focus:
+// - tournament execution only
+// - intentionally small initial core
+// - rounds and dance-specific heats are persisted
+// - detailed scoring logic is intentionally excluded for now because it is
+//   expected to be handled by the DSL later
+//
+// Naming convention:
+// - Tournament = Veranstaltung
+// - Competition = Turnier
+
+Enum organization_kind {
+  club
+  regional_association
+  federation
+  other
+}
+
+Enum person_sex {
+  not_known
+  male
+  female
+  non_binary
+  not_applicable
+}
+
+Enum competition_status {
+  planned
+  open
+  running
+  completed
+  aborted
+  canceled
+}
+
+Enum competition_entry_status {
+  registered
+  withdrawn
+  present
+  started
+  completed
+  disqualified
+  canceled
+}
+
+Enum participant_member_role {
+  leader
+  follower
+  solo_dancer
+  duo_member
+  formation_member
+  small_group_member
+}
+
+Enum competition_round_kind {
+  general_look
+  preliminary
+  intermediate
+  final
+  placement
+  tie_breaker
+}
+
+Enum competition_round_status {
+  planned
+  drawn
+  running
+  completed
+  canceled
+}
+
+Table organizations {
+  id uuid [primary key]
+  kind organization_kind [not null]
+  name varchar [not null]
+  code varchar
+  short_name varchar
+  note text
+
+  indexes {
+    code [unique]
+  }
+}
+
+  Table organization_external_ids {
+    id uuid [primary key]
+    organization_id uuid [not null]
+    source_system varchar [not null]
+    external_id varchar [not null]
+    note text
+  
+    indexes {
+      (organization_id, source_system) [unique]
+      (source_system, external_id) [unique]
+    }
+
+  Note: 'Allows one organization to carry multiple identifiers from different external systems such as DTV ESV or DETV.'
+}
+
+Table federations {
+  id uuid [primary key]
+  organization_id uuid [not null]
+
+  indexes {
+    organization_id [unique]
+  }
+
+  Note: 'A federation is also represented as an organization. Display data such as name and code are sourced from organizations. Examples: DTV, WDSF.'
+}
+
+Table persons {
+  id uuid [primary key]
+  title varchar
+  given_name varchar [not null]
+  surname_prefix varchar
+  surname varchar [not null]
+  display_name varchar [not null]
+  sex person_sex
+  nationality_code char(2)
+}
+
+Table flooring_types {
+  id uuid [primary key]
+  federation_id uuid
+  name varchar [not null]
+  code varchar [not null]
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table competition_types {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table competition_disciplines {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table competition_forms {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table competition_orders {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table participant_types {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table age_groups {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  min_age int
+  max_age int
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table start_classes {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  sort_order int
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table leagues {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  code varchar [not null]
+  competition_year int [not null]
+  note text
+
+  indexes {
+    (federation_id, code, competition_year) [unique]
+  }
+}
+
+Table dances {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  competition_discipline_id uuid
+  name varchar [not null]
+  code varchar [not null]
+  note text
+
+  indexes {
+    (federation_id, code) [unique]
+  }
+}
+
+Table tournaments {
+  id uuid [primary key]
+  federation_id uuid [not null]
+  name varchar [not null]
+  start_date date [not null]
+  end_date date [not null]
+  host_organization_id uuid [not null]
+  organizer_organization_id uuid
+  note text
+
+  Note: 'OrganizerOrganizationId is optional. Effective organizer is organizer_organization_id ?? host_organization_id.'
+}
+
+  Table tournament_external_ids {
+    id uuid [primary key]
+    tournament_id uuid [not null]
+    source_system varchar [not null]
+    external_id varchar [not null]
+    note text
+  
+    indexes {
+      (tournament_id, source_system) [unique]
+      (source_system, external_id) [unique]
+    }
+  }
+
+Table halls {
+  id uuid [primary key]
+  tournament_id uuid [not null]
+  name varchar [not null]
+  abbreviation varchar
+  note text
+
+  indexes {
+    (tournament_id, name) [unique]
+    (tournament_id, abbreviation) [unique]
+  }
+}
+
+Table floors {
+  id uuid [primary key]
+  tournament_id uuid [not null]
+  hall_id uuid [not null]
+  name varchar [not null]
+  abbreviation varchar
+  length_in_meters decimal(8,2) [not null]
+  width_in_meters decimal(8,2) [not null]
+  flooring_type_id uuid
+  note text
+
+  indexes {
+    (tournament_id, abbreviation) [unique]
+  }
+
+  Note: 'tournament_id is intentionally denormalized for uniqueness and simpler references. It must match the tournament of the referenced hall.'
+}
+
+Table participants {
+  id uuid [primary key]
+  participant_type_id uuid [not null]
+  display_name varchar [not null]
+  note text
+}
+
+  Table participant_external_ids {
+    id uuid [primary key]
+    participant_id uuid [not null]
+    source_system varchar [not null]
+    external_id varchar [not null]
+    note text
+  
+    indexes {
+      (participant_id, source_system) [unique]
+      (source_system, external_id) [unique]
+    }
+  }
+
+Table participant_members {
+  id uuid [primary key]
+  participant_id uuid [not null]
+  person_id uuid [not null]
+  member_no int [not null]
+  member_role participant_member_role [not null]
+  organization_id uuid
+  is_primary_number_carrier boolean [not null, default: false]
+
+  indexes {
+    (participant_id, member_no) [unique]
+    (participant_id, person_id) [unique]
+  }
+}
+
+Table competitions {
+  id uuid [primary key]
+  tournament_id uuid [not null]
+  name varchar [not null]
+  planned_start_at timestamptz [not null]
+  default_floor_id uuid
+  status competition_status [not null, default: 'planned']
+  competition_type_id uuid [not null]
+  competition_discipline_id uuid [not null]
+  competition_form_id uuid [not null]
+  competition_order_id uuid [not null]
+  participant_type_id uuid [not null]
+  age_group_id uuid
+  start_class_id uuid
+  league_id uuid
+  note text
+
+  Note: 'start_class_id and league_id are mutually exclusive.'
+}
+
+  Table competition_external_ids {
+    id uuid [primary key]
+    competition_id uuid [not null]
+    source_system varchar [not null]
+    external_id varchar [not null]
+    note text
+  
+    indexes {
+      (competition_id, source_system) [unique]
+      (source_system, external_id) [unique]
+    }
+  }
+
+Table competition_dances {
+  id uuid [primary key]
+  competition_id uuid [not null]
+  dance_id uuid [not null]
+  sequence_no int [not null]
+  note text
+
+  indexes {
+    (competition_id, sequence_no) [unique]
+    (competition_id, dance_id) [unique]
+  }
+}
+
+Table competition_judges {
+  id uuid [primary key]
+  competition_id uuid [not null]
+  person_id uuid [not null]
+  panel_letter varchar
+  note text
+
+  indexes {
+    (competition_id, person_id) [unique]
+    (competition_id, panel_letter) [unique]
+  }
+}
+
+Table competition_entries {
+  id uuid [primary key]
+  competition_id uuid [not null]
+  participant_id uuid [not null]
+  start_number int
+  status competition_entry_status [not null, default: 'registered']
+  registered_at_utc timestamptz
+  checked_in_at_utc timestamptz
+  withdrawn_at_utc timestamptz
+  withdrawal_reason varchar
+  disqualified_at_utc timestamptz
+  disqualification_reason varchar
+  note text
+
+  indexes {
+    (competition_id, participant_id) [unique]
+    (competition_id, start_number) [unique]
+  }
+}
+
+Table competition_rounds {
+  id uuid [primary key]
+  competition_id uuid [not null]
+  number int [not null]
+  kind competition_round_kind [not null]
+  status competition_round_status [not null, default: 'planned']
+  name varchar [not null]
+  floor_id uuid
+  planned_start_at timestamptz
+  started_at_utc timestamptz
+  completed_at_utc timestamptz
+  note text
+
+  indexes {
+    (competition_id, number) [unique]
+  }
+}
+
+Table competition_round_judges {
+  id uuid [primary key]
+  round_id uuid [not null]
+  competition_judge_id uuid [not null]
+  position_code varchar
+  draw_order int
+  note text
+
+  indexes {
+    (round_id, competition_judge_id) [unique]
+    (round_id, position_code) [unique]
+  }
+
+  Note: 'Allows round-specific re-draws such as top/bottom assignments in formation competitions.'
+}
+
+Table competition_round_results {
+  id uuid [primary key]
+  round_id uuid [not null]
+  competition_entry_id uuid [not null]
+  next_round_id uuid
+  rank_from int
+  rank_to int
+  note text
+
+  indexes {
+    (round_id, competition_entry_id) [unique]
+  }
+}
+
+Table competition_round_heats {
+  id uuid [primary key]
+  round_id uuid [not null]
+  number int [not null]
+  dance_id uuid [not null]
+  name varchar
+  note text
+
+  indexes {
+    (round_id, dance_id, number) [unique]
+  }
+
+  Note: 'Heats are dance-specific. An entry may therefore be in different heats for different dances within the same round.'
+}
+
+Table competition_round_heat_entries {
+  id uuid [primary key]
+  heat_id uuid [not null]
+  competition_entry_id uuid [not null]
+  start_order int
+
+  indexes {
+    (heat_id, competition_entry_id) [unique]
+    (heat_id, start_order) [unique]
+  }
+}
+
+Table competition_round_heat_results {
+  id uuid [primary key]
+  heat_id uuid [not null]
+  competition_entry_id uuid [not null]
+  rank_from int [not null]
+  rank_to int [not null]
+  note text
+
+  indexes {
+    (heat_id, competition_entry_id) [unique]
+  }
+}
+
+Table competition_results {
+  id uuid [primary key]
+  competition_id uuid [not null]
+  competition_entry_id uuid [not null]
+  final_rank_from int [not null]
+  final_rank_to int [not null]
+  is_finalist boolean [not null, default: false]
+  note text
+
+  indexes {
+    (competition_id, competition_entry_id) [unique]
+  }
+}
+
+Ref: federations.organization_id > organizations.id
+Ref: organization_external_ids.organization_id > organizations.id
+
+Ref: flooring_types.federation_id > federations.id
+Ref: competition_types.federation_id > federations.id
+Ref: competition_disciplines.federation_id > federations.id
+Ref: competition_forms.federation_id > federations.id
+Ref: competition_orders.federation_id > federations.id
+Ref: participant_types.federation_id > federations.id
+Ref: age_groups.federation_id > federations.id
+Ref: start_classes.federation_id > federations.id
+Ref: leagues.federation_id > federations.id
+Ref: dances.federation_id > federations.id
+Ref: dances.competition_discipline_id > competition_disciplines.id
+
+Ref: tournaments.federation_id > federations.id
+Ref: tournaments.host_organization_id > organizations.id
+Ref: tournaments.organizer_organization_id > organizations.id
+Ref: tournament_external_ids.tournament_id > tournaments.id
+
+Ref: halls.tournament_id > tournaments.id
+
+Ref: floors.tournament_id > tournaments.id
+Ref: floors.hall_id > halls.id
+Ref: floors.flooring_type_id > flooring_types.id
+
+Ref: participants.participant_type_id > participant_types.id
+Ref: participant_external_ids.participant_id > participants.id
+Ref: participant_members.participant_id > participants.id
+Ref: participant_members.person_id > persons.id
+Ref: participant_members.organization_id > organizations.id
+
+Ref: competitions.tournament_id > tournaments.id
+Ref: competitions.default_floor_id > floors.id
+Ref: competitions.competition_type_id > competition_types.id
+Ref: competitions.competition_discipline_id > competition_disciplines.id
+Ref: competitions.competition_form_id > competition_forms.id
+Ref: competitions.competition_order_id > competition_orders.id
+Ref: competitions.participant_type_id > participant_types.id
+Ref: competitions.age_group_id > age_groups.id
+Ref: competitions.start_class_id > start_classes.id
+Ref: competitions.league_id > leagues.id
+Ref: competition_external_ids.competition_id > competitions.id
+
+Ref: competition_dances.competition_id > competitions.id
+Ref: competition_dances.dance_id > dances.id
+
+Ref: competition_judges.competition_id > competitions.id
+Ref: competition_judges.person_id > persons.id
+
+Ref: competition_entries.competition_id > competitions.id
+Ref: competition_entries.participant_id > participants.id
+
+Ref: competition_rounds.competition_id > competitions.id
+Ref: competition_rounds.floor_id > floors.id
+Ref: competition_round_judges.round_id > competition_rounds.id
+Ref: competition_round_judges.competition_judge_id > competition_judges.id
+
+Ref: competition_round_results.round_id > competition_rounds.id
+Ref: competition_round_results.competition_entry_id > competition_entries.id
+Ref: competition_round_results.next_round_id > competition_rounds.id
+
+Ref: competition_round_heats.round_id > competition_rounds.id
+Ref: competition_round_heats.dance_id > dances.id
+
+Ref: competition_round_heat_entries.heat_id > competition_round_heats.id
+Ref: competition_round_heat_entries.competition_entry_id > competition_entries.id
+
+Ref: competition_round_heat_results.heat_id > competition_round_heats.id
+Ref: competition_round_heat_results.competition_entry_id > competition_entries.id
+
+Ref: competition_results.competition_id > competitions.id
+Ref: competition_results.competition_entry_id > competition_entries.id

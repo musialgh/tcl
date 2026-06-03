@@ -131,3 +131,26 @@ great! pretty close. Some improvements needed:
 
 Bugs:
 * csv pathes (at least) interpreted relative to TQL dir
+
+
+I want a dance competion evaluation system design mockup, in German
+* competition execution is regulated by DTV (deutscher Tanzsportverband) and their TSO document
+* attached png screenshots show an existing, older system for the same basic puepose 
+  to explain context to you, do *not* use them as design examples!!
+* primary design example is screen.svg:
+** context bar to the left shows either
+*** collapsible list of competitions and rounds, highlighting the selected one, or
+*** a view of the event's schedule, consisting of halls, floors, competitions, and rounds (optional),
+    vertically aligned to reflect start times or possibly parallel items
+*** by clicking on a sub-item, you can zoom in to restrict the context to a certain focus
+**** e.g. one hall, one floor, one competition
+** role bar on the right shows role-based views that are available to the current user
+*** with the currently active one highlighted
+** center part shows current data to work on
+*** there's a tab bar ("Starts", "Heats", ... in the example) with the current selection highlighted
+*** the tab bar changes with progress within the competition and/or event
+*** e.g. rounds with state 'finished' show "Result" instead of "Starts", "Wertungsrichter" might be missing
+    since it serves to check logged-in-state of the jury members)
+*** < and > buttons advance/regress to the next/previous step, possibly changing permanent data 
+* please ask back whenever anything is unclear, or you see multiple decision paths
+

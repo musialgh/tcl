@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: azimutt
+      POSTGRES_PASSWORD: azimutt
+      POSTGRES_DB: azimutt
+    volumes:
+      - azimutt_db:/var/lib/postgresql/data
+
+  azimutt:
+    image: ghcr.io/azimuttapp/azimutt:main
+    ports:
+      - "4000:4000"
+    environment:
+      PHX_SERVER: "true"
+      PHX_HOST: localhost
+      PORT: "4000"
+      SECRET_KEY_BASE: "changeme_at_least_64_chars_long_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      DATABASE_URL: "postgresql://azimutt:azimutt@db/azimutt"
+      FILE_STORAGE_ADAPTER: local
+      AUTH_PASSWORD: "true"
+      ORGANIZATION_DEFAULT_PLAN: team
+    depends_on:
+      - db
+
+volumes:
+  azimutt_db:

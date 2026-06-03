@@ -1,0 +1,363 @@
+erDiagram
+    organizations {
+        uuid id PK
+        organization_kind kind
+        varchar name
+        varchar code
+        varchar short_name
+        text note
+    }
+
+    organization_external_ids {
+        uuid id PK
+        uuid organization_id FK
+        varchar source_system
+        varchar external_id
+        text note
+    }
+
+    federations {
+        uuid id PK
+        uuid organization_id FK
+    }
+
+    persons {
+        uuid id PK
+        varchar title
+        varchar given_name
+        varchar surname_prefix
+        varchar surname
+        varchar display_name
+        person_sex sex
+        char nationality_code
+    }
+
+    flooring_types {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+    }
+
+    competition_types {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    competition_disciplines {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    competition_forms {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    competition_orders {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    participant_types {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    age_groups {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        int min_age
+        int max_age
+        text note
+    }
+
+    start_classes {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        int sort_order
+        text note
+    }
+
+    leagues {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        varchar code
+        int competition_year
+        text note
+    }
+
+    dances {
+        uuid id PK
+        uuid federation_id FK
+        uuid competition_discipline_id FK
+        varchar name
+        varchar code
+        text note
+    }
+
+    tournaments {
+        uuid id PK
+        uuid federation_id FK
+        varchar name
+        date start_date
+        date end_date
+        uuid host_organization_id FK
+        uuid organizer_organization_id FK
+        text note
+    }
+
+    tournament_external_ids {
+        uuid id PK
+        uuid tournament_id FK
+        varchar source_system
+        varchar external_id
+        text note
+    }
+
+    halls {
+        uuid id PK
+        uuid tournament_id FK
+        varchar name
+        varchar abbreviation
+        text note
+    }
+
+    floors {
+        uuid id PK
+        uuid tournament_id FK
+        uuid hall_id FK
+        varchar name
+        varchar abbreviation
+        decimal length_in_meters
+        decimal width_in_meters
+        uuid flooring_type_id FK
+        text note
+    }
+
+    participants {
+        uuid id PK
+        uuid participant_type_id FK
+        varchar display_name
+        text note
+    }
+
+    participant_external_ids {
+        uuid id PK
+        uuid participant_id FK
+        varchar source_system
+        varchar external_id
+        text note
+    }
+
+    participant_members {
+        uuid id PK
+        uuid participant_id FK
+        uuid person_id FK
+        int member_no
+        participant_member_role member_role
+        uuid organization_id FK
+        boolean is_primary_number_carrier
+    }
+
+    competitions {
+        uuid id PK
+        uuid tournament_id FK
+        varchar name
+        timestamptz planned_start_at
+        uuid default_floor_id FK
+        competition_status status
+        uuid competition_type_id FK
+        uuid competition_discipline_id FK
+        uuid competition_form_id FK
+        uuid competition_order_id FK
+        uuid participant_type_id FK
+        uuid age_group_id FK
+        uuid start_class_id FK
+        uuid league_id FK
+        text note
+    }
+
+    competition_external_ids {
+        uuid id PK
+        uuid competition_id FK
+        varchar source_system
+        varchar external_id
+        text note
+    }
+
+    competition_dances {
+        uuid id PK
+        uuid competition_id FK
+        uuid dance_id FK
+        int sequence_no
+        text note
+    }
+
+    competition_judges {
+        uuid id PK
+        uuid competition_id FK
+        uuid person_id FK
+        varchar panel_letter
+        text note
+    }
+
+    competition_entries {
+        uuid id PK
+        uuid competition_id FK
+        uuid participant_id FK
+        int start_number
+        competition_entry_status status
+        timestamptz registered_at_utc
+        timestamptz checked_in_at_utc
+        timestamptz withdrawn_at_utc
+        varchar withdrawal_reason
+        timestamptz disqualified_at_utc
+        varchar disqualification_reason
+        text note
+    }
+
+    competition_rounds {
+        uuid id PK
+        uuid competition_id FK
+        int number
+        competition_round_kind kind
+        competition_round_status status
+        varchar name
+        uuid floor_id FK
+        timestamptz planned_start_at
+        timestamptz started_at_utc
+        timestamptz completed_at_utc
+        text note
+    }
+
+    competition_round_judges {
+        uuid id PK
+        uuid round_id FK
+        uuid competition_judge_id FK
+        varchar position_code
+        int draw_order
+        text note
+    }
+
+    competition_round_results {
+        uuid id PK
+        uuid round_id FK
+        uuid competition_entry_id FK
+        uuid next_round_id FK
+        int rank_from
+        int rank_to
+        text note
+    }
+
+    competition_round_heats {
+        uuid id PK
+        uuid round_id FK
+        int number
+        uuid dance_id FK
+        varchar name
+        text note
+    }
+
+    competition_round_heat_entries {
+        uuid id PK
+        uuid heat_id FK
+        uuid competition_entry_id FK
+        int start_order
+    }
+
+    competition_round_heat_results {
+        uuid id PK
+        uuid heat_id FK
+        uuid competition_entry_id FK
+        int rank_from
+        int rank_to
+        text note
+    }
+
+    competition_results {
+        uuid id PK
+        uuid competition_id FK
+        uuid competition_entry_id FK
+        int final_rank_from
+        int final_rank_to
+        boolean is_finalist
+        text note
+    }
+
+    organizations ||--o{ federations : ""
+    organizations ||--o{ organization_external_ids : ""
+    federations ||--o{ flooring_types : ""
+    federations ||--o{ competition_types : ""
+    federations ||--o{ competition_disciplines : ""
+    federations ||--o{ competition_forms : ""
+    federations ||--o{ competition_orders : ""
+    federations ||--o{ participant_types : ""
+    federations ||--o{ age_groups : ""
+    federations ||--o{ start_classes : ""
+    federations ||--o{ leagues : ""
+    federations ||--o{ dances : ""
+    competition_disciplines ||--o{ dances : ""
+    federations ||--o{ tournaments : ""
+    organizations ||--o{ tournaments : ""
+    tournaments ||--o{ tournament_external_ids : ""
+    tournaments ||--o{ halls : ""
+    tournaments ||--o{ floors : ""
+    halls ||--o{ floors : ""
+    flooring_types ||--o{ floors : ""
+    participant_types ||--o{ participants : ""
+    participants ||--o{ participant_external_ids : ""
+    participants ||--o{ participant_members : ""
+    persons ||--o{ participant_members : ""
+    organizations ||--o{ participant_members : ""
+    tournaments ||--o{ competitions : ""
+    floors ||--o{ competitions : ""
+    competition_types ||--o{ competitions : ""
+    competition_disciplines ||--o{ competitions : ""
+    competition_forms ||--o{ competitions : ""
+    competition_orders ||--o{ competitions : ""
+    participant_types ||--o{ competitions : ""
+    age_groups ||--o{ competitions : ""
+    start_classes ||--o{ competitions : ""
+    leagues ||--o{ competitions : ""
+    competitions ||--o{ competition_external_ids : ""
+    competitions ||--o{ competition_dances : ""
+    dances ||--o{ competition_dances : ""
+    competitions ||--o{ competition_judges : ""
+    persons ||--o{ competition_judges : ""
+    competitions ||--o{ competition_entries : ""
+    participants ||--o{ competition_entries : ""
+    competitions ||--o{ competition_rounds : ""
+    floors ||--o{ competition_rounds : ""
+    competition_rounds ||--o{ competition_round_judges : ""
+    competition_judges ||--o{ competition_round_judges : ""
+    competition_rounds ||--o{ competition_round_results : ""
+    competition_entries ||--o{ competition_round_results : ""
+    competition_rounds ||--o{ competition_round_heats : ""
+    dances ||--o{ competition_round_heats : ""
+    competition_round_heats ||--o{ competition_round_heat_entries : ""
+    competition_entries ||--o{ competition_round_heat_entries : ""
+    competition_round_heats ||--o{ competition_round_heat_results : ""
+    competition_entries ||--o{ competition_round_heat_results : ""
+    competitions ||--o{ competition_results : ""
+    competition_entries ||--o{ competition_results : ""

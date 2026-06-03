@@ -1,0 +1,273 @@
+organizations
+  id uuid pk
+  kind organization_kind
+  name varchar
+  code varchar
+  short_name varchar
+  note text
+
+organization_external_ids
+  id uuid pk
+  organization_id uuid -> organizations(id)
+  source_system varchar
+  external_id varchar
+  note text
+
+federations
+  id uuid pk
+  organization_id uuid -> organizations(id)
+
+persons
+  id uuid pk
+  title varchar
+  given_name varchar
+  surname_prefix varchar
+  surname varchar
+  display_name varchar
+  sex person_sex
+  nationality_code char(2)
+
+flooring_types
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+
+competition_types
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  note text
+
+competition_disciplines
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  note text
+
+competition_forms
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  note text
+
+competition_orders
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  note text
+
+participant_types
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  note text
+
+age_groups
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  min_age int
+  max_age int
+  note text
+
+start_classes
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  sort_order int
+  note text
+
+leagues
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  code varchar
+  competition_year int
+  note text
+
+dances
+  id uuid pk
+  federation_id uuid -> federations(id)
+  competition_discipline_id uuid -> competition_disciplines(id)
+  name varchar
+  code varchar
+  note text
+
+tournaments
+  id uuid pk
+  federation_id uuid -> federations(id)
+  name varchar
+  start_date date
+  end_date date
+  host_organization_id uuid -> organizations(id)
+  organizer_organization_id uuid -> organizations(id)
+  note text
+
+tournament_external_ids
+  id uuid pk
+  tournament_id uuid -> tournaments(id)
+  source_system varchar
+  external_id varchar
+  note text
+
+halls
+  id uuid pk
+  tournament_id uuid -> tournaments(id)
+  name varchar
+  abbreviation varchar
+  note text
+
+floors
+  id uuid pk
+  tournament_id uuid -> tournaments(id)
+  hall_id uuid -> halls(id)
+  name varchar
+  abbreviation varchar
+  length_in_meters decimal(8,2)
+  width_in_meters decimal(8,2)
+  flooring_type_id uuid -> flooring_types(id)
+  note text
+
+participants
+  id uuid pk
+  participant_type_id uuid -> participant_types(id)
+  display_name varchar
+  note text
+
+participant_external_ids
+  id uuid pk
+  participant_id uuid -> participants(id)
+  source_system varchar
+  external_id varchar
+  note text
+
+participant_members
+  id uuid pk
+  participant_id uuid -> participants(id)
+  person_id uuid -> persons(id)
+  member_no int
+  member_role participant_member_role
+  organization_id uuid -> organizations(id)
+  is_primary_number_carrier boolean
+
+competitions
+  id uuid pk
+  tournament_id uuid -> tournaments(id)
+  name varchar
+  planned_start_at timestamptz
+  default_floor_id uuid -> floors(id)
+  status competition_status
+  competition_type_id uuid -> competition_types(id)
+  competition_discipline_id uuid -> competition_disciplines(id)
+  competition_form_id uuid -> competition_forms(id)
+  competition_order_id uuid -> competition_orders(id)
+  participant_type_id uuid -> participant_types(id)
+  age_group_id uuid -> age_groups(id)
+  start_class_id uuid -> start_classes(id)
+  league_id uuid -> leagues(id)
+  note text
+
+competition_external_ids
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  source_system varchar
+  external_id varchar
+  note text
+
+competition_dances
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  dance_id uuid -> dances(id)
+  sequence_no int
+  note text
+
+competition_judges
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  person_id uuid -> persons(id)
+  panel_letter varchar
+  note text
+
+competition_entries
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  participant_id uuid -> participants(id)
+  start_number int
+  status competition_entry_status
+  registered_at_utc timestamptz
+  checked_in_at_utc timestamptz
+  withdrawn_at_utc timestamptz
+  withdrawal_reason varchar
+  disqualified_at_utc timestamptz
+  disqualification_reason varchar
+  note text
+
+competition_rounds
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  number int
+  kind competition_round_kind
+  status competition_round_status
+  name varchar
+  floor_id uuid -> floors(id)
+  planned_start_at timestamptz
+  started_at_utc timestamptz
+  completed_at_utc timestamptz
+  note text
+
+competition_round_judges
+  id uuid pk
+  round_id uuid -> competition_rounds(id)
+  competition_judge_id uuid -> competition_judges(id)
+  position_code varchar
+  draw_order int
+  note text
+
+competition_round_results
+  id uuid pk
+  round_id uuid -> competition_rounds(id)
+  competition_entry_id uuid -> competition_entries(id)
+  next_round_id uuid -> competition_rounds(id)
+  rank_from int
+  rank_to int
+  note text
+
+competition_round_heats
+  id uuid pk
+  round_id uuid -> competition_rounds(id)
+  number int
+  dance_id uuid -> dances(id)
+  name varchar
+  note text
+
+competition_round_heat_entries
+  id uuid pk
+  heat_id uuid -> competition_round_heats(id)
+  competition_entry_id uuid -> competition_entries(id)
+  start_order int
+
+competition_round_heat_results
+  id uuid pk
+  heat_id uuid -> competition_round_heats(id)
+  competition_entry_id uuid -> competition_entries(id)
+  rank_from int
+  rank_to int
+  note text
+
+competition_results
+  id uuid pk
+  competition_id uuid -> competitions(id)
+  competition_entry_id uuid -> competition_entries(id)
+  final_rank_from int
+  final_rank_to int
+  is_finalist boolean
+  note text
+
