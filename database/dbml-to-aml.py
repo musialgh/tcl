@@ -1,55 +1,8 @@
 #!/usr/bin/env python3
-"""Convert DBML to Azimutt AML v2 format with enum types and namespace grouping."""
+"""Convert DBML to Azimutt AML v2 format with enum types."""
 
 import re
 import sys
-
-# Namespace grouping: table -> namespace
-GROUPS = {
-    'organizations':                  'org',
-    'organization_external_ids':      'org',
-    'federations':                    'org',
-
-    'competition_types':              'catalog',
-    'competition_disciplines':        'catalog',
-    'competition_forms':              'catalog',
-    'competition_orders':             'catalog',
-    'participant_types':              'catalog',
-    'age_groups':                     'catalog',
-    'start_classes':                  'catalog',
-    'leagues':                        'catalog',
-    'dances':                         'catalog',
-    'flooring_types':                 'catalog',
-
-    'persons':                        'people',
-    'participants':                   'people',
-    'participant_external_ids':       'people',
-    'participant_members':            'people',
-
-    'tournaments':                    'venue',
-    'tournament_external_ids':        'venue',
-    'halls':                          'venue',
-    'floors':                         'venue',
-
-    'competitions':                   'competition',
-    'competition_external_ids':       'competition',
-    'competition_dances':             'competition',
-    'competition_judges':             'competition',
-    'competition_rounds':             'competition',
-    'competition_round_judges':       'competition',
-
-    'competition_entries':            'participation',
-    'competition_round_results':      'participation',
-    'competition_round_heats':        'participation',
-    'competition_round_heat_entries': 'participation',
-    'competition_round_heat_results': 'participation',
-    'competition_results':            'participation',
-}
-
-
-def qualified(table):
-    ns = GROUPS.get(table)
-    return f'{ns}.{table}' if ns else table
 
 
 def parse_dbml(path):
@@ -65,7 +18,6 @@ def parse_dbml(path):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Enum definition
         m = re.match(r'^Enum\s+(\w+)\s*\{', line)
         if m:
             enum_name = m.group(1)
@@ -80,7 +32,6 @@ def parse_dbml(path):
             i += 1
             continue
 
-        # Table definition
         m = re.match(r'^Table\s+(\w+)\s*\{', line)
         if m:
             table_name = m.group(1)
@@ -104,7 +55,6 @@ def parse_dbml(path):
             tables[table_name] = columns
             continue
 
-        # Ref definition
         m = re.match(r'^Ref:\s+(\w+)\.(\w+)\s*>\s*(\w+)\.(\w+)', line)
         if m:
             refs.append((m.group(1), m.group(2), m.group(3), m.group(4)))
@@ -118,32 +68,24 @@ def to_aml(enums, tables, refs):
     fk_map = {(t, c): (tt, tc) for t, c, tt, tc in refs}
     out = []
 
-    # Enum types
     if enums:
         for enum_name, values in enums.items():
             out.append(f'type {enum_name} ({", ".join(values)})')
         out.append('')
 
-    # Tables grouped by namespace
-    current_ns = None
     for table_name, columns in tables.items():
-        ns = GROUPS.get(table_name)
-        if ns != current_ns:
-            current_ns = ns
-            out.append('')
-
-        out.append(qualified(table_name))
+        out.append(table_name)
         for col_name, col_type, is_pk in columns:
             parts = [f'  {col_name}', col_type]
             if is_pk:
                 parts.append('pk')
             if (table_name, col_name) in fk_map:
                 to_table, to_col = fk_map[(table_name, col_name)]
-                parts.append(f'-> {qualified(to_table)}({to_col})')
+                parts.append(f'-> {to_table}({to_col})')
             out.append(' '.join(parts))
         out.append('')
 
-    return '\n'.join(out).lstrip('\n')
+    return '\n'.join(out)
 
 
 if __name__ == '__main__':
