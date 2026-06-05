@@ -19,9 +19,9 @@ services:
       - "127.0.0.1:4000:4000"
     environment:
       PHX_SERVER: "true"
-      PHX_HOST: localhost
+      PHX_HOST: azimutt.badweb.de
       PORT: "4000"
-      SECRET_KEY_BASE: "changeme_at_least_64_chars_long_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      SECRET_KEY_BASE: "0r6hwqWB8GDVp4jFVRUE+fMNG1pjEN6zWz/KFzVW2n5hvSA3vm0/j1iBqTmiP482"
       DATABASE_URL: "postgresql://azimutt:azimutt@db/azimutt"
       FILE_STORAGE_ADAPTER: local
       AUTH_PASSWORD: "true"
@@ -31,7 +31,7 @@ services:
       SMTP_PORT: "1025"
       SMTP_USERNAME: ""
       SMTP_PASSWORD: ""
-      SENDER_EMAIL: azimutt@localhost
+      SENDER_EMAIL: azimutt@badweb.de
     depends_on:
       - db
       - mailpit
