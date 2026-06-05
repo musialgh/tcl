@@ -2,6 +2,7 @@
 # Start the Azimutt stack and patch plan_seats after migrations run.
 set -e
 
+docker-compose down --remove-orphans || true
 docker-compose up -d
 
 DB=$(docker-compose ps -q db)
