@@ -11,12 +11,12 @@ services:
   mailpit:
     image: axllent/mailpit
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
 
   azimutt:
     image: ghcr.io/azimuttapp/azimutt:main
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       PHX_SERVER: "true"
       PHX_HOST: localhost
