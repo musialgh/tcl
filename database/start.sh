@@ -13,6 +13,6 @@ done
 sleep 3
 
 docker exec $DB psql -U azimutt -d azimutt -c \
-  "UPDATE organizations SET plan = 'enterprise', plan_seats = 99 WHERE plan_seats IS NULL OR plan_seats < 99;"
+  "UPDATE organizations SET plan = 'enterprise', plan_seats = 99;"
 
 echo "Done. Azimutt: http://localhost:4000  Mail: http://localhost:8025"
