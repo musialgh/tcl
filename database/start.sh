@@ -2,17 +2,9 @@
 # Start the Azimutt stack and patch plan_seats after migrations run.
 set -e
 
-if docker compose version &>/dev/null 2>&1; then
-    compose() { docker compose "$@"; }
-elif command -v docker-compose &>/dev/null; then
-    compose() { docker-compose "$@"; }
-else
-    echo "docker compose / docker-compose not found" >&2; exit 1
-fi
+docker compose up -d
 
-compose up -d
-
-DB=$(compose ps -q db)
+DB=$(docker compose ps -q db)
 
 echo "Waiting for Azimutt to finish migrations..."
 until docker logs $DB 2>&1 | grep -q "database system is ready to accept connections"; do
