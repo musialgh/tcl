@@ -17,6 +17,6 @@ until curl -s http://localhost:4000 > /dev/null 2>&1; do
 done
 
 docker exec $DB psql -U azimutt -d azimutt -c \
-  "UPDATE organizations SET plan = 'enterprise', plan_seats = 99;"
+  "UPDATE organizations SET plan = 'enterprise', plan_seats = 99, plan_status = 'active', plan_freq = 'yearly', plan_validated = now();"
 
 echo "Done. Azimutt: http://localhost:4000  Mail: http://localhost:8025"
