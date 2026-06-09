@@ -8,12 +8,22 @@ services:
       POSTGRES_DB: azimutt
     volumes:
       - azimutt_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U azimutt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   mailpit:
     image: axllent/mailpit
     restart: unless-stopped
     ports:
       - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8025/api/v1/info > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   azimutt:
     image: ghcr.io/azimuttapp/azimutt:main
@@ -36,8 +46,28 @@ services:
       SMTP_PASSWORD: ""
       SENDER_EMAIL: azimutt@badweb.de
     depends_on:
-      - db
-      - mailpit
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000 > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  patch:
+    image: postgres:16
+    restart: on-failure
+    entrypoint: ["psql"]
+    command:
+      - "postgresql://azimutt:azimutt@db/azimutt"
+      - "-c"
+      - "UPDATE organizations SET plan = 'enterprise', plan_seats = 99, plan_status = 'active', plan_freq = 'yearly', plan_validated = now();"
+    depends_on:
+      azimutt:
+        condition: service_healthy
 
 volumes:
   azimutt_db:
