@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: azimutt
       POSTGRES_PASSWORD: azimutt
@@ -10,11 +11,13 @@ services:
 
   mailpit:
     image: axllent/mailpit
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8025:8025"
 
   azimutt:
     image: ghcr.io/azimuttapp/azimutt:main
+    restart: unless-stopped
     ports:
       - "127.0.0.1:4000:4000"
     environment:
