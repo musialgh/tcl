@@ -46,10 +46,8 @@ services:
       SMTP_PASSWORD: ""
       SENDER_EMAIL: azimutt@badweb.de
     depends_on:
-      db:
-        condition: service_healthy
-      mailpit:
-        condition: service_started
+      - db
+      - mailpit
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000 > /dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -60,14 +58,16 @@ services:
   patch:
     image: postgres:16
     restart: on-failure
-    entrypoint: ["psql"]
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "postgresql://azimutt:azimutt@db/azimutt"
-      - "-c"
-      - "UPDATE organizations SET plan = 'enterprise', plan_seats = 99, plan_status = 'active', plan_freq = 'yearly', plan_validated = now();"
+      - |
+        until psql postgresql://azimutt:azimutt@db/azimutt -c '\dt organizations' 2>/dev/null | grep -q organizations; do
+          echo 'Waiting for Azimutt migrations...'; sleep 5
+        done
+        psql postgresql://azimutt:azimutt@db/azimutt -c \
+          "UPDATE organizations SET plan = 'enterprise', plan_seats = 99, plan_status = 'active', plan_freq = 'yearly', plan_validated = now();"
     depends_on:
-      azimutt:
-        condition: service_healthy
+      - db
 
 volumes:
   azimutt_db:
