@@ -1,0 +1,1115 @@
+{
+  "id": "6203aa77-9e8c-419e-a059-6adf4615e6e9",
+  "name": "TAS Snippets Marek",
+  "sources": [
+    {
+      "id": "4ed23bbb-3214-4248-a808-57e0e7d3a4df",
+      "name": "default",
+      "kind": {
+        "kind": "AmlEditor"
+      },
+      "content": [
+        ""
+      ],
+      "tables": [],
+      "relations": [],
+      "createdAt": 1783095555174,
+      "updatedAt": 1783096215178
+    },
+    {
+      "id": "5f506ffd-3af5-41eb-ae92-ff7a182aab60",
+      "name": "Accounts",
+      "kind": {
+        "kind": "AmlEditor"
+      },
+      "content": [
+        "account",
+        "  id uuid pk",
+        "  client_id uuid nullable -> client(id)",
+        "  event_id uuid nullable -> event(id) | null: global account, non-null: event-specific account",
+        "  login varchar | should use email address for all global and all personal accounts",
+        "  password_hash varchar ",
+        "  password_salt varchar",
+        "  password_text varchar nullable | non-null only permitted for event-specific accounts",
+        "  person_id uuid nullable -> person(id) | null only permitted for event-specific accounts",
+        "  organization_external_id_id uuid nullable -> organization_external_id(id) | non-null only permitted for global accounts",
+        "",
+        "role | config: a role configured for a spefic organization, or a global one",
+        "  id uuid pk",
+        "  client_id uuid nullable -> client(id)",
+        "  name varchar",
+        "  description text",
+        "  orgnaization_id uuid nullable -> organization(id) | null: global role, non-null: organization-specific role",
+        "",
+        "account_x_role | a role assigned to an account",
+        "  account_id uuid pk -> account(id)",
+        "  role_id uuid pk -> role(id)",
+        "",
+        "license | config: a license configured for a specific organization, or a global one",
+        "  id uuid pk",
+        "  client_id uuid nullable -> client(id)",
+        "  name varchar",
+        "  description text",
+        "  orgnaization_id uuid nullable -> organization(id) | null: global license, non-null: organization-specific license",
+        "",
+        "person_x_license | a license assigned to a person",
+        "  person_id uuid pk -> person(id)",
+        "  license_id uuid pk -> license(id)  ",
+        "",
+        "permission | config: a configured permission ",
+        "  id uuid pk",
+        "  client_id uuid nullable -> client(id)",
+        "  name varchar unique | used by backend code to look-up a permission",
+        "  description text",
+        "",
+        "role_x_permission | config: a permission assigned to a role",
+        "  role_id uuid pk -> role(id)",
+        "  permission_id uuid pk -> permission(id)",
+        "",
+        "person | here, only for relationships",
+        "  id uuid pk",
+        "  client_id uuid nullable -> client(id)",
+        ""
+      ],
+      "tables": [
+        {
+          "schema": "",
+          "table": "account",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "client_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "event_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: global account, non-null: event-specific account"
+              }
+            },
+            {
+              "name": "login",
+              "type": "varchar",
+              "comment": {
+                "text": "should use email address for all global and all personal accounts"
+              }
+            },
+            {
+              "name": "password_hash",
+              "type": "varchar"
+            },
+            {
+              "name": "password_salt",
+              "type": "varchar"
+            },
+            {
+              "name": "password_text",
+              "type": "varchar",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only permitted for event-specific accounts"
+              }
+            },
+            {
+              "name": "person_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null only permitted for event-specific accounts"
+              }
+            },
+            {
+              "name": "organization_external_id_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only permitted for global accounts"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "table": "account_x_role",
+          "columns": [
+            {
+              "name": "account_id",
+              "type": "uuid"
+            },
+            {
+              "name": "role_id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "account_id",
+              "role_id"
+            ]
+          },
+          "comment": {
+            "text": "a role assigned to an account"
+          }
+        },
+        {
+          "schema": "",
+          "table": "license",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "client_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "description",
+              "type": "text"
+            },
+            {
+              "name": "orgnaization_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: global license, non-null: organization-specific license"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "config: a license configured for a specific organization, or a global one"
+          }
+        },
+        {
+          "schema": "",
+          "table": "permission",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "client_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "name",
+              "type": "varchar",
+              "comment": {
+                "text": "used by backend code to look-up a permission"
+              }
+            },
+            {
+              "name": "description",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "permission_name_unique_az",
+              "columns": [
+                "name"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "config: a configured permission"
+          }
+        },
+        {
+          "schema": "",
+          "table": "person",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "client_id",
+              "type": "uuid",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "here, only for relationships"
+          }
+        },
+        {
+          "schema": "",
+          "table": "person_x_license",
+          "columns": [
+            {
+              "name": "person_id",
+              "type": "uuid"
+            },
+            {
+              "name": "license_id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "person_id",
+              "license_id"
+            ]
+          },
+          "comment": {
+            "text": "a license assigned to a person"
+          }
+        },
+        {
+          "schema": "",
+          "table": "role",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "client_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "description",
+              "type": "text"
+            },
+            {
+              "name": "orgnaization_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: global role, non-null: organization-specific role"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "config: a role configured for a spefic organization, or a global one"
+          }
+        },
+        {
+          "schema": "",
+          "table": "role_x_permission",
+          "columns": [
+            {
+              "name": "role_id",
+              "type": "uuid"
+            },
+            {
+              "name": "permission_id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "role_id",
+              "permission_id"
+            ]
+          },
+          "comment": {
+            "text": "config: a permission assigned to a role"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "client_id"
+          },
+          "ref": {
+            "table": ".client",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "person_id"
+          },
+          "ref": {
+            "table": ".person",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "organization_external_id_id"
+          },
+          "ref": {
+            "table": ".organization_external_id",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role",
+            "column": "client_id"
+          },
+          "ref": {
+            "table": ".client",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role",
+            "column": "orgnaization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account_x_role",
+            "column": "account_id"
+          },
+          "ref": {
+            "table": ".account",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account_x_role",
+            "column": "role_id"
+          },
+          "ref": {
+            "table": ".role",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".license",
+            "column": "client_id"
+          },
+          "ref": {
+            "table": ".client",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".license",
+            "column": "orgnaization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".person_x_license",
+            "column": "person_id"
+          },
+          "ref": {
+            "table": ".person",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".person_x_license",
+            "column": "license_id"
+          },
+          "ref": {
+            "table": ".license",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".permission",
+            "column": "client_id"
+          },
+          "ref": {
+            "table": ".client",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role_x_permission",
+            "column": "role_id"
+          },
+          "ref": {
+            "table": ".role",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role_x_permission",
+            "column": "permission_id"
+          },
+          "ref": {
+            "table": ".permission",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".person",
+            "column": "client_id"
+          },
+          "ref": {
+            "table": ".client",
+            "column": "id"
+          }
+        }
+      ],
+      "createdAt": 1783099549760,
+      "updatedAt": 1783099719760
+    },
+    {
+      "id": "cd03bc84-6ae8-4e6b-a136-5404d5c4d657",
+      "name": "Schedule",
+      "kind": {
+        "kind": "AmlEditor"
+      },
+      "content": [
+        "type timeslot_kind (other, intro, practice, presentation, awards, break, goodbye, round)",
+        "type round_kind (other, first, intermediate, semifinal, final, redance, general_look, tie_breaker)",
+        "type timeslot_status (planned, ready, running, completed, canceled)",
+        "",
+        "timeslot | a schedule entry, something that occupies a time period on one or more floors",
+        "  id uuid pk",
+        "  event_id uuid -> event(id)",
+        "  competition_id uuid nullable -> competition(id)",
+        "  round_id uuid nullable -> round(id)",
+        "  kind timeslot_kind",
+        "  round_kind round_kind nullable | iff kind = round",
+        "  status timeslot_status",
+        "  name varchar",
+        "  num_dances int",
+        "  num_heats int",
+        "  heat_duration_s int | expected duration of a heat, in seconds",
+        "  buffer_duration_s int | expected buffer time for set-up and finishing, in seconds",
+        "  expected_duration_s int | expected duration of the timeslot, in seconds",
+        "  actual_duration_s int | actual duration of the timeslot, in seconds",
+        "  predecessor_syncpoint_id uuid -> syncpoint(id) | this timeslot starts with the given syncpoint",
+        "  successor_syncpoint_id uuid -> syncpoint(id) | this triggers the given syncpoint",
+        "  note text",
+        "",
+        "timeslot_x_floor | a floor assigned to a timeslot",
+        "  timeslot_id uuid pk -> timeslot(id)",
+        "  floor_id uuid pk -> floor(id)",
+        "",
+        "syncpoint | a point in time that defines a sequence between 'predecessor' and 'successor' timeslot(s)",
+        "  id uuid pk",
+        "  event_id uuid -> event(id)",
+        "  time timestamptz | planned or actual time (planned-time field not helpful due to permanent re-planning)",
+        "  earliest_time timestamptz nullable | if set, wait until this time has been reached (e.g. announced start time)",
+        "  note text",
+        ""
+      ],
+      "tables": [
+        {
+          "schema": "",
+          "table": "syncpoint",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "time",
+              "type": "timestamptz",
+              "comment": {
+                "text": "planned or actual time (planned-time field not helpful due to permanent re-planning)"
+              }
+            },
+            {
+              "name": "earliest_time",
+              "type": "timestamptz",
+              "nullable": true,
+              "comment": {
+                "text": "if set, wait until this time has been reached (e.g. announced start time)"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a point in time that defines a sequence between 'predecessor' and 'successor' timeslot(s)"
+          }
+        },
+        {
+          "schema": "",
+          "table": "timeslot",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "round_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "kind",
+              "type": "timeslot_kind"
+            },
+            {
+              "name": "round_kind",
+              "type": "round_kind",
+              "nullable": true,
+              "comment": {
+                "text": "iff kind = round"
+              }
+            },
+            {
+              "name": "status",
+              "type": "timeslot_status"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "num_dances",
+              "type": "int"
+            },
+            {
+              "name": "num_heats",
+              "type": "int"
+            },
+            {
+              "name": "heat_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected duration of a heat, in seconds"
+              }
+            },
+            {
+              "name": "buffer_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected buffer time for set-up and finishing, in seconds"
+              }
+            },
+            {
+              "name": "expected_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected duration of the timeslot, in seconds"
+              }
+            },
+            {
+              "name": "actual_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "actual duration of the timeslot, in seconds"
+              }
+            },
+            {
+              "name": "predecessor_syncpoint_id",
+              "type": "uuid",
+              "comment": {
+                "text": "this timeslot starts with the given syncpoint"
+              }
+            },
+            {
+              "name": "successor_syncpoint_id",
+              "type": "uuid",
+              "comment": {
+                "text": "this triggers the given syncpoint"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a schedule entry, something that occupies a time period on one or more floors"
+          }
+        },
+        {
+          "schema": "",
+          "table": "timeslot_x_floor",
+          "columns": [
+            {
+              "name": "timeslot_id",
+              "type": "uuid"
+            },
+            {
+              "name": "floor_id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "timeslot_id",
+              "floor_id"
+            ]
+          },
+          "comment": {
+            "text": "a floor assigned to a timeslot"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "competition_id"
+          },
+          "ref": {
+            "table": ".competition",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "predecessor_syncpoint_id"
+          },
+          "ref": {
+            "table": ".syncpoint",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "successor_syncpoint_id"
+          },
+          "ref": {
+            "table": ".syncpoint",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot_x_floor",
+            "column": "timeslot_id"
+          },
+          "ref": {
+            "table": ".timeslot",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot_x_floor",
+            "column": "floor_id"
+          },
+          "ref": {
+            "table": ".floor",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".syncpoint",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        }
+      ],
+      "types": [
+        {
+          "schema": "",
+          "name": "round_kind",
+          "value": {
+            "enum": [
+              "other",
+              "first",
+              "intermediate",
+              "semifinal",
+              "final",
+              "redance",
+              "general_look",
+              "tie_breaker"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "timeslot_kind",
+          "value": {
+            "enum": [
+              "other",
+              "intro",
+              "practice",
+              "presentation",
+              "awards",
+              "break",
+              "goodbye",
+              "round"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "timeslot_status",
+          "value": {
+            "enum": [
+              "planned",
+              "ready",
+              "running",
+              "completed",
+              "canceled"
+            ]
+          }
+        }
+      ],
+      "createdAt": 1783102019759,
+      "updatedAt": 1783102019759
+    }
+  ],
+  "layouts": {
+    "subset Accounts": {
+      "tables": [
+        {
+          "id": ".person",
+          "position": {
+            "left": 1080,
+            "top": 110
+          },
+          "size": {
+            "width": 145.4375,
+            "height": 93
+          },
+          "color": "sky",
+          "columns": [
+            "id",
+            "client_id"
+          ]
+        },
+        {
+          "id": ".role_x_permission",
+          "position": {
+            "left": 740,
+            "top": 570
+          },
+          "size": {
+            "width": 227.0625,
+            "height": 93
+          },
+          "color": "fuchsia",
+          "columns": [
+            "role_id",
+            "permission_id"
+          ]
+        },
+        {
+          "id": ".role",
+          "position": {
+            "left": 220,
+            "top": 460
+          },
+          "size": {
+            "width": 215.734375,
+            "height": 165
+          },
+          "color": "fuchsia",
+          "columns": [
+            "id",
+            "name",
+            "description",
+            "client_id",
+            "orgnaization_id"
+          ]
+        },
+        {
+          "id": ".person_x_license",
+          "position": {
+            "left": 1080,
+            "top": 280
+          },
+          "size": {
+            "width": 217.390625,
+            "height": 93
+          },
+          "color": "sky",
+          "columns": [
+            "person_id",
+            "license_id"
+          ]
+        },
+        {
+          "id": ".permission",
+          "position": {
+            "left": 290,
+            "top": 750
+          },
+          "size": {
+            "width": 161.78125,
+            "height": 141
+          },
+          "color": "cyan",
+          "columns": [
+            "id",
+            "name",
+            "description",
+            "client_id"
+          ]
+        },
+        {
+          "id": ".license",
+          "position": {
+            "left": 1080,
+            "top": 460
+          },
+          "size": {
+            "width": 215.734375,
+            "height": 165
+          },
+          "color": "rose",
+          "columns": [
+            "id",
+            "name",
+            "description",
+            "client_id",
+            "orgnaization_id"
+          ]
+        },
+        {
+          "id": ".account_x_role",
+          "position": {
+            "left": 740,
+            "top": 380
+          },
+          "size": {
+            "width": 200.453125,
+            "height": 93
+          },
+          "color": "pink",
+          "columns": [
+            "account_id",
+            "role_id"
+          ]
+        },
+        {
+          "id": ".account",
+          "position": {
+            "left": 220,
+            "top": 110
+          },
+          "size": {
+            "width": 304.3125,
+            "height": 261
+          },
+          "color": "pink",
+          "columns": [
+            "id",
+            "login",
+            "password_hash",
+            "password_salt",
+            "client_id",
+            "event_id",
+            "password_text",
+            "person_id",
+            "organization_external_id_id"
+          ]
+        }
+      ],
+      "createdAt": 1783095555174,
+      "updatedAt": 1783102164772
+    },
+    "subset Schedule": {
+      "tables": [
+        {
+          "id": ".timeslot_x_floor",
+          "position": {
+            "left": 1120,
+            "top": 290
+          },
+          "size": {
+            "width": 212.09375,
+            "height": 93
+          },
+          "color": "pink",
+          "columns": [
+            "timeslot_id",
+            "floor_id"
+          ]
+        },
+        {
+          "id": ".timeslot",
+          "position": {
+            "left": 650,
+            "top": 290
+          },
+          "size": {
+            "width": 285.75,
+            "height": 429
+          },
+          "color": "pink",
+          "columns": [
+            "id",
+            "predecessor_syncpoint_id",
+            "successor_syncpoint_id",
+            "event_id",
+            "kind",
+            "status",
+            "name",
+            "num_dances",
+            "num_heats",
+            "heat_duration_s",
+            "buffer_duration_s",
+            "expected_duration_s",
+            "actual_duration_s",
+            "note",
+            "competition_id"
+          ]
+        },
+        {
+          "id": ".syncpoint",
+          "position": {
+            "left": 190,
+            "top": 320
+          },
+          "size": {
+            "width": 210.265625,
+            "height": 165
+          },
+          "color": "teal",
+          "columns": [
+            "id",
+            "event_id",
+            "time",
+            "note",
+            "earliest_time"
+          ]
+        }
+      ],
+      "createdAt": 1783102009760,
+      "updatedAt": 1783102154768
+    }
+  },
+  "createdAt": 1783099844159,
+  "updatedAt": 1783102128097,
+  "version": 2
+}

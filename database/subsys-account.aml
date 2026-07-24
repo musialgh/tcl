@@ -1,0 +1,46 @@
+account
+  id uuid pk
+  client_id uuid nullable -> client(id)
+  event_id uuid nullable -> event(id) | null: global account, non-null: event-specific account
+  login varchar | should use email address for all global and all personal accounts
+  password_hash varchar 
+  password_salt varchar
+  password_text varchar nullable | non-null only permitted for event-specific accounts
+  person_id uuid nullable -> person(id) | null only permitted for event-specific accounts
+  organization_external_id_id uuid nullable -> organization_external_id(id) | non-null only permitted for global accounts
+
+role | config: a role configured for a spefic organization, or a global one
+  id uuid pk
+  client_id uuid nullable -> client(id)
+  name varchar
+  description text
+  orgnaization_id uuid nullable -> organization(id) | null: global role, non-null: organization-specific role
+
+account_x_role | a role assigned to an account
+  account_id uuid pk -> account(id)
+  role_id uuid pk -> role(id)
+
+license | config: a license configured for a specific organization, or a global one
+  id uuid pk
+  client_id uuid nullable -> client(id)
+  name varchar
+  description text
+  organization_id uuid nullable -> organization(id) | null: global license, non-null: organization-specific license
+
+person_x_license | a license assigned to a person
+  person_id uuid pk -> person(id)
+  license_id uuid pk -> license(id)  
+
+permission | config: a configured permission 
+  id uuid pk
+  client_id uuid nullable -> client(id)
+  name varchar unique | used by backend code to look-up a permission
+  description text
+
+role_x_permission | config: a permission assigned to a role
+  role_id uuid pk -> role(id)
+  permission_id uuid pk -> permission(id)
+
+person | here, only for relationships
+  id uuid pk
+  client_id uuid nullable -> client(id)

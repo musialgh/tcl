@@ -1,0 +1,4311 @@
+{
+  "id": "da8e1e2e-e1c9-454e-83db-7f41634bd878",
+  "name": "TAS 0724",
+  "sources": [
+    {
+      "id": "bd902e16-aaf4-4c6b-b14c-dc05d72d79dc",
+      "name": "default",
+      "kind": {
+        "kind": "AmlEditor"
+      },
+      "content": [
+        "# TAS database model",
+        "#",
+        "# Current focus:",
+        "# - event and competition execution only",
+        "# - intentionally small initial core",
+        "# - rounds and dance-specific heats are persisted",
+        "# - judging marks and calculated result values are persisted for traceability",
+        "# - scoring calculation logic itself is intentionally excluded and expected to be",
+        "#   handled by the DSL/domain logic",
+        "#",
+        "# Naming convention:",
+        "# - Event = Veranstaltung",
+        "# - Competition = Turnier",
+        "# - table names are singular",
+        "#",
+        "# Color legend:",
+        "# - blue = event configuration data, no changes during event, e.g. person, organization, competition_type, dance",
+        "# - green = event data, e.g. event, participant, competition, round, teamup, mark",
+        "# - fuchsia = schedule data, e.g. timeslot, syncpoint",
+        "# - red = accounts, roles, and permissions ",
+        "# - gray = traceability data, e.g. logs, hashes",
+        "# - orange = external references, e.g. external ids",
+        "# PLEASE NOTE: color property from AML is currently ignored by azimutt! :-(",
+        "",
+        "",
+        "type organization_kind (club, regional_association, federation, other)",
+        "type person_sex (not_known, male, female, non_binary, not_applicable)",
+        "type participant_member_role (unspecified, lead, follow)",
+        "",
+        "organization {color: blue}",
+        "  id uuid pk",
+        "  kind organization_kind",
+        "  name varchar",
+        "  code varchar nullable unique",
+        "  short_name varchar nullable",
+        "  note text nullable",
+        "",
+        "organization_external_id {color: orange} | Allows one organization to carry multiple identifiers from different external systems such as DTV ESV or DETV.",
+        "  id uuid pk",
+        "  organization_id uuid unique=organization_external_id_organization_source_uniq -> organization(id)",
+        "  source_system varchar unique=organization_external_id_organization_source_uniq unique=organization_external_id_source_external_uniq",
+        "  external_id varchar unique=organization_external_id_source_external_uniq",
+        "  note text nullable",
+        "",
+        "federation {color: blue} | A federation is also represented as an organization. Display data such as name and code are sourced from organization. Examples: DTV, WDSF.",
+        "  id uuid pk",
+        "  organization_id uuid unique -> organization(id)",
+        "",
+        "person {color: blue}",
+        "  id uuid pk",
+        "  title varchar nullable",
+        "  given_name varchar",
+        "  surname_prefix varchar nullable",
+        "  surname varchar",
+        "  display_name varchar",
+        "  sex person_sex nullable",
+        "  nationality_code char(2) nullable",
+        "",
+        "flooring_type {color: blue}",
+        "  id uuid pk",
+        "  federation_id uuid nullable unique=flooring_type_federation_code_uniq -> federation(id)",
+        "  name varchar",
+        "  code varchar unique=flooring_type_federation_code_uniq",
+        "",
+        "competition_type {color: blue}",
+        "  id uuid pk",
+        "  organization_id uuid unique=idx_code -> organization",
+        "  name varchar",
+        "  code varchar unique=idx_code",
+        "  note text nullable",
+        "",
+        "competition_discipline {color: blue}",
+        "  id uuid pk",
+        "  organization_id uuid unique=idx_code -> organization",
+        "  name varchar",
+        "  code varchar unique=idx_code",
+        "  note text nullable",
+        "",
+        "competition_form {color: blue}",
+        "  id uuid pk",
+        "  organization_id uuid unique=idx_code -> organization",
+        "  name varchar",
+        "  code varchar unique=idx_code",
+        "  note text nullable",
+        "",
+        "competition_order {color: blue}",
+        "  id uuid pk",
+        "  organization_id uuid unique=idx_code -> organization",
+        "  name varchar",
+        "  code varchar unique=idx_code",
+        "  note text nullable",
+        "",
+        "participant_type {color: blue} | TBD purpose?",
+        "  id uuid pk",
+        "  federation_id uuid unique=participant_type_federation_code_uniq -> federation(id)",
+        "  name varchar",
+        "  code varchar unique=participant_type_federation_code_uniq",
+        "  note text nullable",
+        "",
+        "age_group {color: blue}",
+        "  id uuid pk",
+        "  federation_id uuid unique=age_group_federation_code_uniq -> federation(id)",
+        "  name varchar",
+        "  code varchar unique=age_group_federation_code_uniq",
+        "  min_age int nullable",
+        "  max_age int nullable",
+        "  note text nullable",
+        "",
+        "start_class {color: blue}",
+        "  id uuid pk",
+        "  federation_id uuid unique=start_class_federation_code_uniq -> federation(id)",
+        "  name varchar",
+        "  code varchar unique=start_class_federation_code_uniq",
+        "  sort_order int nullable",
+        "  note text nullable",
+        "",
+        "league {color: blue}",
+        "  id uuid pk",
+        "  federation_id uuid unique=league_federation_code_year_uniq -> federation(id)",
+        "  name varchar",
+        "  code varchar unique=league_federation_code_year_uniq",
+        "  competition_year int unique=league_federation_code_year_uniq",
+        "  note text nullable",
+        "",
+        "dance {color: blue}",
+        "  id uuid pk",
+        "  federation_id uuid unique=dance_federation_code_uniq -> federation(id)",
+        "  competition_discipline_id uuid nullable -> competition_discipline(id)",
+        "  name varchar",
+        "  code varchar unique=dance_federation_code_uniq",
+        "  note text nullable",
+        "",
+        "event {color: green}",
+        "  id uuid pk",
+        "  federation_id uuid -> federation(id)",
+        "  name varchar",
+        "  start_date date",
+        "  end_date date",
+        "  host_organization_id uuid -> organization(id)",
+        "  organizer_organization_id uuid nullable -> organization(id)",
+        "  note text nullable | OrganizerOrganizationId is optional. Effective organizer is organizer_organization_id ?? host_organization_id.",
+        "",
+        "event_external_id {color: orange}",
+        "  id uuid pk",
+        "  event_id uuid unique=event_external_id_event_source_uniq -> event(id)",
+        "  source_system varchar unique=event_external_id_event_source_uniq unique=event_external_id_source_external_uniq",
+        "  external_id varchar unique=event_external_id_source_external_uniq",
+        "  note text nullable",
+        "",
+        "hall {color: green}",
+        "  id uuid pk",
+        "  event_id uuid unique=hall_event_name_uniq unique=hall_event_abbreviation_uniq -> event(id)",
+        "  name varchar unique=hall_event_name_uniq",
+        "  abbreviation varchar nullable unique=hall_event_abbreviation_uniq",
+        "  note text nullable",
+        "",
+        "floor {color: green} | event_id is intentionally denormalized for uniqueness and simpler references. It must match the event of the referenced hall.",
+        "  id uuid pk",
+        "  event_id uuid unique=floor_event_abbreviation_uniq -> event(id)",
+        "  hall_id uuid -> hall(id)",
+        "  name varchar",
+        "  abbreviation varchar nullable unique=floor_event_abbreviation_uniq",
+        "  length_in_meters decimal(8,2)",
+        "  width_in_meters decimal(8,2)",
+        "  flooring_type_id uuid nullable -> flooring_type(id)",
+        "  note text nullable",
+        "",
+        "participant {color: green}",
+        "  id uuid pk",
+        "  event_id uuid -> event",
+        "  participant_type_id uuid -> participant_type | TBD purpose?",
+        "  status participant_status(registered, withdrawn, present, started, completed, disqualified, canceled)=registered",
+        "  display_name varchar",
+        "  note text nullable",
+        "",
+        "participant_external_id {color: orange}",
+        "  id uuid pk",
+        "  participant_id uuid unique=participant_external_id_participant_source_uniq -> participant(id)",
+        "  source_system varchar unique=participant_external_id_participant_source_uniq unique=participant_external_id_source_external_uniq",
+        "  external_id varchar unique=participant_external_id_source_external_uniq",
+        "  note text nullable",
+        "",
+        "participant_member {color: green} |||",
+        "  member_role is deliberately generic.",
+        "  The participant type defines whether a participant is a pair, solo, duo, group, or any future structure.",
+        "|||",
+        "  id uuid pk",
+        "  participant_id uuid unique=participant_member_participant_member_no_uniq unique=participant_member_participant_person_uniq -> participant(id)",
+        "  person_id uuid unique=participant_member_participant_person_uniq -> person(id)",
+        "  member_no int unique=participant_member_participant_member_no_uniq",
+        "  member_role participant_member_role",
+        "  organization_id uuid nullable -> organization(id)",
+        "  is_primary_number_carrier boolean=false",
+        "",
+        "",
+        "#### Competition Setup and Performance",
+        "",
+        "",
+        "competition {color: green} |||",
+        "  A single observable, scheduled contest for a ranking between competing participants. ",
+        "  - normally, defined by a single start class and age group ",
+        "  - if age classes and/or age groups are combined, *competition* represents the combination ",
+        "    (i.e. all participants competing at the same *time*) ",
+        "|||",
+        "  id uuid pk",
+        "  event_id uuid -> event",
+        "  name varchar",
+        "  status competition_status_type(planned, ready, running, completed, aborted, canceled)=planned",
+        "  competition_type_id uuid -> competition_type(id)",
+        "  competition_discipline_id uuid -> competition_discipline(id)",
+        "  competition_form_id uuid -> competition_form(id)",
+        "  competition_order_id uuid -> competition_order(id)",
+        "  participant_type_id uuid -> participant_type(id)",
+        "  league_id uuid nullable -> league(id) | only used for league competitions",
+        "  note text nullable",
+        "",
+        "rel competition <> age_group   | n:m relation between competitions and age groups (m > 1 required for combinations)",
+        "rel competition <> start_class | n:m relation between competitions and start classes (m > 1 required for combinations)",
+        "rel competition <> floor       | default floor(s) assigned to the competition (to select round-specific floor assignments from)",
+        "",
+        "competition_dance {color: green} |||",
+        "  A \"default\" dance for a competition, defining superset of dances available for each round, and their order.",
+        "",
+        "  Note: This is almost just a join entity, but we also need sequence_no for ordering.",
+        "|||",
+        "  id uuid pk",
+        "  competition_id uuid unique=idx_sequence -> competition",
+        "  dance_id uuid -> dance | note: not unique, to support repeated dances in a round (e.g. Jack & Jill)",
+        "  sequence_no int unique=idx_sequence",
+        "  note text nullable",
+        "",
+        "rel competition_dance <> round | subset of dances selected for each round, using ordering from competition_dance.sequence_no",
+        "",
+        "participant_status_event {color: green} | Stores status changes such as registration, check-in, withdrawal, disqualification, cancellation, and corrections.",
+        "  id uuid pk",
+        "  participant_id uuid -> participant",
+        "  new_status participant_status",
+        "  reason text nullable | mandatory for changes relevant to competition report",
+        "  occurrence_time timestamptz",
+        "",
+        "round {color: green}",
+        "  id uuid pk",
+        "  competition_id uuid unique=idx_sequence -> competition",
+        "  number int=1 unique=idx_sequence",
+        "  kind round_kind(general_look, classification, preliminary, redance, intermediate, semifinal, final, placement, tie_breaker)",
+        "  status round_status(planned, ready, running, paused, completed, published, canceled)=planned",
+        "  name varchar",
+        "  note text nullable",
+        "",
+        "rel round <> floor | floor selection for each round, (usually) subset of competition default floors",
+        "",
+        "teamup {color: green} | a judged party, e.g. a couple (one participant) or a temporary Jack & Jill team (two participants), dancing in a heat",
+        "  id uuid pk",
+        "  round_id uuid -> round",
+        "  dance_id uuid -> dance",
+        "  heat_number int=1",
+        "",
+        "rel teamup <> participant |||",
+        "  Assignment of participants to teamups, n:1 in \"classical\" cases, e.g. n:2 for Jack & Jill.",
+        "",
+        "  Note: a participant may (technically) join multiple heats in the same round, e.g. on lack of leaders in Jack & Jill",
+        "||| ",
+        "",
+        "judge_employment {color: green} |||",
+        "  Contains all attributes that apply to a judge's activity within a certain round.",
+        "  Please note that this requires the linked referenced account to possess the corresponding jury role, but the latter is not formally modeled (TBD?).",
+        "|||",
+        "  id uuid pk",
+        "  account_id uuid unique=idx_judge -> account",
+        "  round_id uuid unique=idx_judge -> round",
+        "  floor_id uuid nullable -> floor | only for multi-floor rounds (e.g. university sports), otherwise null",
+        "  position_code varchar nullable | only for formations, otherwise null",
+        "  draw_order int nullable | TBD purpose?",
+        "  status judge_employment_status(absent,present,completed)=absent",
+        "  last_active timestamptz nullable | last time the judge was active in the round (e.g. round selection or last mark submission)",
+        "  confirmed_dances_count int=0 | number of dances already completed by the judge (e.g. to enforce r/o during marks presentation)",
+        "",
+        "mark {color: green} |||",
+        "  Stores an actual mark given by one judge for one participant and one dance, ",
+        "  such as a selection mark, placement, numeric score, lift, disqualification, or absent mark.",
+        "|||",
+        "  id uuid pk",
+        "  participant_id uuid -> participant | note: in case of a multi-participant teamup, *all* participants must receive marks",
+        "  account_id uuid -> account | account under which the judge is working",
+        "  dance_id uuid -> dance",
+        "  kind mark_kind(selection, placement, score, lift, disqualification, absent, interrupt)",
+        "  value numeric nullable | numeric value shall always be given if possible (e.g. last place for disqualification, absent, or canceled)",
+        "  reason text nullable | optional (usually sufficiently reflected by kind)",
+        "",
+        "",
+        "##### Evaluation and Results",
+        "",
+        "",
+        "evaluation {color: green} | Flexible key-value result output for DSL and evaluation traceability.",
+        "  id uuid pk",
+        "  round_id uuid -> round",
+        "  participant_id uuid -> participant",
+        "  key_path varchar        ||| unique sequence of keys, seperated by ':', syntax: [a-zA-Z0-9_]*(:[a-zA-Z0-9_]*)*",
+        "                              example: \"SF:3:sum\" for Slow Foxtrot, place 3 and better, sum of marks\" |||",
+        "  value varchar nullable  | usually numeric value, string representation for flexibility",
+        "  reason text nullable    | reason for the value, e.g. \"disqualified for lift\", ideally with rule reference",
+        "  result_log_id uuid -> result_log | log reference for legal traceability",
+        "",
+        "result {color: green} |||",
+        "  Stores the official placement after a round, which is the competition result if the round is the final one. ",
+        "  Detailed traceability values are stored in table evaluation, which also redundantly include the final result.",
+        "|||",
+        "  id uuid pk",
+        "  round_id uuid unique=idx_result-> round",
+        "  participant_id uuid unique=idx_result -> participant",
+        "  start_class_id uuid nullable -> start_class | non-null only used in combined competition for focussed placement",
+        "  age_group_id uuid nullable -> age_group | non-null only used in combined competition for foussed placement",
+        "  is_final boolean=false | true iff this is the final result of the competition",
+        "  place_from int",
+        "  place_to int",
+        "  result_log_id uuid -> result_log | log reference for legal traceability",
+        "",
+        "",
+        "##### Traceability & Logs",
+        "",
+        "",
+        "result_log {color: grey} |||",
+        "  Stores traceability hashes on result calculation. Used for both intermediate and final results.",
+        "  Outdated entries will remain if the calculation is re-run.",
+        "|||",
+        "  id uuid pk",
+        "  dsl_hash varchar               | hash of the DSL source code used for calculation",
+        "  result_hash varchar nullable   | hash of the result data used for calculation (nullable since record must be created *before* calculation)",
+        "  account_id uuid -> account     | user account that triggered the calculation",
+        "  client_id varchar              | id of client machine from which the calculation was triggered",
+        "  calculated_time timestamptz    | timestamp of the calculation",
+        "",
+        "",
+        "##### Schedule",
+        "",
+        "",
+        "timeslot {color: fuchsia} | a schedule entry, something that occupies a time period on one or more floors",
+        "  id uuid pk",
+        "  event_id uuid -> event",
+        "  competition_id uuid nullable -> competition | non-null iff competition-related (including non-judged, like intro or GL)",
+        "  round_id uuid nullable -> round | non-null iff round-related (including non-judged, like GL) and round exists",
+        "  kind timeslot_kind(other, intro, practice, presentation, awards, break, goodbye, round)",
+        "  round_kind round_kind nullable | iff kind = round",
+        "  status timeslot_status(planned, ready, running, completed, canceled)",
+        "  name varchar",
+        "  num_dances int",
+        "  num_heats int",
+        "  heat_duration_s int | expected duration of a heat, in seconds",
+        "  buffer_duration_s int | expected buffer time for set-up and finishing, in seconds",
+        "  expected_duration_s int | expected duration of the timeslot, in seconds",
+        "  actual_duration_s int | actual duration of the timeslot, in seconds",
+        "  predecessor_syncpoint_id uuid -> syncpoint | this timeslot starts with the given syncpoint",
+        "  successor_syncpoint_id uuid -> syncpoint | this triggers the given syncpoint",
+        "  note text",
+        "",
+        "rel timeslot <> floor | a floor assigned to a timeslot",
+        "",
+        "syncpoint {color: fuchsia} | a point in time that defines a sequence between 'predecessor' and 'successor' timeslot(s)",
+        "  id uuid pk",
+        "  event_id uuid -> event",
+        "  time timestamptz | planned or actual time (planned-time field not helpful due to permanent re-planning)",
+        "  earliest_time timestamptz nullable | if set, wait until this time has been reached (e.g. announced start time)",
+        "  note text",
+        "",
+        "",
+        "##### External References",
+        "",
+        "",
+        "external {color: orange} | stores one or more external pk's for various kinds of TAS records (polymorphic, expandable)",
+        "  kind external_kind(organization, event, competition, participant, person)",
+        "  tas_id uuid pk",
+        "  idspace_id uuid -> idspace pk",
+        "  external_id varchar",
+        "  note text nullable",
+        "",
+        "rel external(tas_id) -kind=organization>  organization(id)",
+        "rel external(tas_id) -kind=event>         event(id)",
+        "rel external(tas_id) -kind=competition>   competition(id)",
+        "rel external(tas_id) -kind=participant>   participant(id)",
+        "rel external(tas_id) -kind=person>        person(id)",
+        "",
+        "idspace {color: orange} | a namespace for external identifiers, e.g. DTV ESV, DETV, WDSF, etc.",
+        "  id uuid pk",
+        "  event_id uuid -> event | for client discrimination",
+        "  name varchar",
+        "  code varchar unique",
+        "  note text nullable",
+        ""
+      ],
+      "tables": [
+        {
+          "schema": "",
+          "table": "age_group",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "min_age",
+              "type": "int",
+              "nullable": true
+            },
+            {
+              "name": "max_age",
+              "type": "int",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "age_group_federation_code_uniq",
+              "columns": [
+                "federation_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "competition",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "status",
+              "type": "competition_status_type",
+              "default": "planned"
+            },
+            {
+              "name": "competition_type_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_discipline_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_form_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_order_id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_type_id",
+              "type": "uuid"
+            },
+            {
+              "name": "league_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "only used for league competitions"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "A single observable, scheduled contest for a ranking between competing participants. \n- normally, defined by a single start class and age group \n- if age classes and/or age groups are combined, *competition* represents the combination \n  (i.e. all participants competing at the same *time*) "
+          }
+        },
+        {
+          "schema": "",
+          "table": "competition_dance",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_id",
+              "type": "uuid"
+            },
+            {
+              "name": "dance_id",
+              "type": "uuid",
+              "comment": {
+                "text": "note: not unique, to support repeated dances in a round (e.g. Jack & Jill)"
+              }
+            },
+            {
+              "name": "sequence_no",
+              "type": "int"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_sequence",
+              "columns": [
+                "competition_id",
+                "sequence_no"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "A \"default\" dance for a competition, defining superset of dances available for each round, and their order.\n\nNote: This is almost just a join entity, but we also need sequence_no for ordering."
+          }
+        },
+        {
+          "schema": "",
+          "table": "competition_discipline",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_code",
+              "columns": [
+                "organization_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "competition_form",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_code",
+              "columns": [
+                "organization_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "competition_order",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_code",
+              "columns": [
+                "organization_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "competition_type",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_code",
+              "columns": [
+                "organization_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "dance",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_discipline_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "dance_federation_code_uniq",
+              "columns": [
+                "federation_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "evaluation",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "round_id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid"
+            },
+            {
+              "name": "key_path",
+              "type": "varchar",
+              "comment": {
+                "text": "unique sequence of keys, seperated by ':', syntax: [a-zA-Z0-9_]*(:[a-zA-Z0-9_]*)*\n                             example: \"SF:3:sum\" for Slow Foxtrot, place 3 and better, sum of marks\" "
+              }
+            },
+            {
+              "name": "value",
+              "type": "varchar",
+              "nullable": true,
+              "comment": {
+                "text": "usually numeric value, string representation for flexibility"
+              }
+            },
+            {
+              "name": "reason",
+              "type": "text",
+              "nullable": true,
+              "comment": {
+                "text": "reason for the value, e.g. \"disqualified for lift\", ideally with rule reference"
+              }
+            },
+            {
+              "name": "result_log_id",
+              "type": "uuid",
+              "comment": {
+                "text": "log reference for legal traceability"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "Flexible key-value result output for DSL and evaluation traceability."
+          }
+        },
+        {
+          "schema": "",
+          "table": "event",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "start_date",
+              "type": "date"
+            },
+            {
+              "name": "end_date",
+              "type": "date"
+            },
+            {
+              "name": "host_organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "organizer_organization_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true,
+              "comment": {
+                "text": "OrganizerOrganizationId is optional. Effective organizer is organizer_organization_id ?? host_organization_id."
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "table": "event_external_id",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "source_system",
+              "type": "varchar"
+            },
+            {
+              "name": "external_id",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "event_external_id_event_source_uniq",
+              "columns": [
+                "event_id",
+                "source_system"
+              ]
+            },
+            {
+              "name": "event_external_id_source_external_uniq",
+              "columns": [
+                "source_system",
+                "external_id"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "external",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "external_kind"
+            },
+            {
+              "name": "tas_id",
+              "type": "uuid"
+            },
+            {
+              "name": "idspace_id",
+              "type": "uuid"
+            },
+            {
+              "name": "external_id",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "tas_id",
+              "idspace_id"
+            ]
+          },
+          "comment": {
+            "text": "stores one or more external pk's for various kinds of TAS records (polymorphic, expandable)"
+          }
+        },
+        {
+          "schema": "",
+          "table": "federation",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "federation_organization_id_unique_az",
+              "columns": [
+                "organization_id"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "A federation is also represented as an organization. Display data such as name and code are sourced from organization. Examples: DTV, WDSF."
+          }
+        },
+        {
+          "schema": "",
+          "table": "floor",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "hall_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "abbreviation",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "length_in_meters",
+              "type": "decimal(8,2)"
+            },
+            {
+              "name": "width_in_meters",
+              "type": "decimal(8,2)"
+            },
+            {
+              "name": "flooring_type_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "floor_event_abbreviation_uniq",
+              "columns": [
+                "event_id",
+                "abbreviation"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "event_id is intentionally denormalized for uniqueness and simpler references. It must match the event of the referenced hall."
+          }
+        },
+        {
+          "schema": "",
+          "table": "flooring_type",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "flooring_type_federation_code_uniq",
+              "columns": [
+                "federation_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "hall",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "abbreviation",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "hall_event_name_uniq",
+              "columns": [
+                "event_id",
+                "name"
+              ]
+            },
+            {
+              "name": "hall_event_abbreviation_uniq",
+              "columns": [
+                "event_id",
+                "abbreviation"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "idspace",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid",
+              "comment": {
+                "text": "for client discrimination"
+              }
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idspace_code_unique_az",
+              "columns": [
+                "code"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "a namespace for external identifiers, e.g. DTV ESV, DETV, WDSF, etc."
+          }
+        },
+        {
+          "schema": "",
+          "table": "judge_employment",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "account_id",
+              "type": "uuid"
+            },
+            {
+              "name": "round_id",
+              "type": "uuid"
+            },
+            {
+              "name": "floor_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "only for multi-floor rounds (e.g. university sports), otherwise null"
+              }
+            },
+            {
+              "name": "position_code",
+              "type": "varchar",
+              "nullable": true,
+              "comment": {
+                "text": "only for formations, otherwise null"
+              }
+            },
+            {
+              "name": "draw_order",
+              "type": "int",
+              "nullable": true,
+              "comment": {
+                "text": "TBD purpose?"
+              }
+            },
+            {
+              "name": "status",
+              "type": "judge_employment_status",
+              "default": "absent"
+            },
+            {
+              "name": "last_active",
+              "type": "timestamptz",
+              "nullable": true,
+              "comment": {
+                "text": "last time the judge was active in the round (e.g. round selection or last mark submission)"
+              }
+            },
+            {
+              "name": "confirmed_dances_count",
+              "type": "int",
+              "comment": {
+                "text": "number of dances already completed by the judge (e.g. to enforce r/o during marks presentation)"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_judge",
+              "columns": [
+                "account_id",
+                "round_id"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "Contains all attributes that apply to a judge's activity within a certain round.\nPlease note that this requires the linked referenced account to possess the corresponding jury role, but the latter is not formally modeled (TBD?)."
+          }
+        },
+        {
+          "schema": "",
+          "table": "league",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "competition_year",
+              "type": "int"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "league_federation_code_year_uniq",
+              "columns": [
+                "federation_id",
+                "code",
+                "competition_year"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "mark",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid",
+              "comment": {
+                "text": "note: in case of a multi-participant teamup, *all* participants must receive marks"
+              }
+            },
+            {
+              "name": "account_id",
+              "type": "uuid",
+              "comment": {
+                "text": "account under which the judge is working"
+              }
+            },
+            {
+              "name": "dance_id",
+              "type": "uuid"
+            },
+            {
+              "name": "kind",
+              "type": "mark_kind"
+            },
+            {
+              "name": "value",
+              "type": "numeric",
+              "nullable": true,
+              "comment": {
+                "text": "numeric value shall always be given if possible (e.g. last place for disqualification, absent, or canceled)"
+              }
+            },
+            {
+              "name": "reason",
+              "type": "text",
+              "nullable": true,
+              "comment": {
+                "text": "optional (usually sufficiently reflected by kind)"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "Stores an actual mark given by one judge for one participant and one dance, \nsuch as a selection mark, placement, numeric score, lift, disqualification, or absent mark."
+          }
+        },
+        {
+          "schema": "",
+          "table": "organization",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "kind",
+              "type": "organization_kind"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "short_name",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "organization_code_unique_az",
+              "columns": [
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "organization_external_id",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid"
+            },
+            {
+              "name": "source_system",
+              "type": "varchar"
+            },
+            {
+              "name": "external_id",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "organization_external_id_organization_source_uniq",
+              "columns": [
+                "organization_id",
+                "source_system"
+              ]
+            },
+            {
+              "name": "organization_external_id_source_external_uniq",
+              "columns": [
+                "source_system",
+                "external_id"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "Allows one organization to carry multiple identifiers from different external systems such as DTV ESV or DETV."
+          }
+        },
+        {
+          "schema": "",
+          "table": "participant",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_type_id",
+              "type": "uuid",
+              "comment": {
+                "text": "TBD purpose?"
+              }
+            },
+            {
+              "name": "status",
+              "type": "participant_status",
+              "default": "registered"
+            },
+            {
+              "name": "display_name",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "table": "participant_external_id",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid"
+            },
+            {
+              "name": "source_system",
+              "type": "varchar"
+            },
+            {
+              "name": "external_id",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "participant_external_id_participant_source_uniq",
+              "columns": [
+                "participant_id",
+                "source_system"
+              ]
+            },
+            {
+              "name": "participant_external_id_source_external_uniq",
+              "columns": [
+                "source_system",
+                "external_id"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "participant_member",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid"
+            },
+            {
+              "name": "person_id",
+              "type": "uuid"
+            },
+            {
+              "name": "member_no",
+              "type": "int"
+            },
+            {
+              "name": "member_role",
+              "type": "participant_member_role"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid",
+              "nullable": true
+            },
+            {
+              "name": "is_primary_number_carrier",
+              "type": "boolean"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "participant_member_participant_member_no_uniq",
+              "columns": [
+                "participant_id",
+                "member_no"
+              ]
+            },
+            {
+              "name": "participant_member_participant_person_uniq",
+              "columns": [
+                "participant_id",
+                "person_id"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "member_role is deliberately generic.\nThe participant type defines whether a participant is a pair, solo, duo, group, or any future structure."
+          }
+        },
+        {
+          "schema": "",
+          "table": "participant_status_event",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid"
+            },
+            {
+              "name": "new_status",
+              "type": "participant_status"
+            },
+            {
+              "name": "reason",
+              "type": "text",
+              "nullable": true,
+              "comment": {
+                "text": "mandatory for changes relevant to competition report"
+              }
+            },
+            {
+              "name": "occurrence_time",
+              "type": "timestamptz"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "Stores status changes such as registration, check-in, withdrawal, disqualification, cancellation, and corrections."
+          }
+        },
+        {
+          "schema": "",
+          "table": "participant_type",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "participant_type_federation_code_uniq",
+              "columns": [
+                "federation_id",
+                "code"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "TBD purpose?"
+          }
+        },
+        {
+          "schema": "",
+          "table": "person",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "title",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "given_name",
+              "type": "varchar"
+            },
+            {
+              "name": "surname_prefix",
+              "type": "varchar",
+              "nullable": true
+            },
+            {
+              "name": "surname",
+              "type": "varchar"
+            },
+            {
+              "name": "display_name",
+              "type": "varchar"
+            },
+            {
+              "name": "sex",
+              "type": "person_sex",
+              "nullable": true
+            },
+            {
+              "name": "nationality_code",
+              "type": "char(2)",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "table": "result",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "round_id",
+              "type": "uuid"
+            },
+            {
+              "name": "participant_id",
+              "type": "uuid"
+            },
+            {
+              "name": "start_class_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only used in combined competition for focussed placement"
+              }
+            },
+            {
+              "name": "age_group_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only used in combined competition for foussed placement"
+              }
+            },
+            {
+              "name": "is_final",
+              "type": "boolean",
+              "comment": {
+                "text": "true iff this is the final result of the competition"
+              }
+            },
+            {
+              "name": "place_from",
+              "type": "int"
+            },
+            {
+              "name": "place_to",
+              "type": "int"
+            },
+            {
+              "name": "result_log_id",
+              "type": "uuid",
+              "comment": {
+                "text": "log reference for legal traceability"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_result",
+              "columns": [
+                "round_id",
+                "participant_id"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "Stores the official placement after a round, which is the competition result if the round is the final one. \nDetailed traceability values are stored in table evaluation, which also redundantly include the final result."
+          }
+        },
+        {
+          "schema": "",
+          "table": "result_log",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "dsl_hash",
+              "type": "varchar",
+              "comment": {
+                "text": "hash of the DSL source code used for calculation"
+              }
+            },
+            {
+              "name": "result_hash",
+              "type": "varchar",
+              "nullable": true,
+              "comment": {
+                "text": "hash of the result data used for calculation (nullable since record must be created *before* calculation)"
+              }
+            },
+            {
+              "name": "account_id",
+              "type": "uuid",
+              "comment": {
+                "text": "user account that triggered the calculation"
+              }
+            },
+            {
+              "name": "client_id",
+              "type": "varchar",
+              "comment": {
+                "text": "id of client machine from which the calculation was triggered"
+              }
+            },
+            {
+              "name": "calculated_time",
+              "type": "timestamptz",
+              "comment": {
+                "text": "timestamp of the calculation"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "Stores traceability hashes on result calculation. Used for both intermediate and final results.\nOutdated entries will remain if the calculation is re-run."
+          }
+        },
+        {
+          "schema": "",
+          "table": "round",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_id",
+              "type": "uuid"
+            },
+            {
+              "name": "number",
+              "type": "int",
+              "default": "1"
+            },
+            {
+              "name": "kind",
+              "type": "round_kind"
+            },
+            {
+              "name": "status",
+              "type": "round_status",
+              "default": "planned"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "idx_sequence",
+              "columns": [
+                "competition_id",
+                "number"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "start_class",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "federation_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "code",
+              "type": "varchar"
+            },
+            {
+              "name": "sort_order",
+              "type": "int",
+              "nullable": true
+            },
+            {
+              "name": "note",
+              "type": "text",
+              "nullable": true
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "start_class_federation_code_uniq",
+              "columns": [
+                "federation_id",
+                "code"
+              ]
+            }
+          ]
+        },
+        {
+          "schema": "",
+          "table": "syncpoint",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "time",
+              "type": "timestamptz",
+              "comment": {
+                "text": "planned or actual time (planned-time field not helpful due to permanent re-planning)"
+              }
+            },
+            {
+              "name": "earliest_time",
+              "type": "timestamptz",
+              "nullable": true,
+              "comment": {
+                "text": "if set, wait until this time has been reached (e.g. announced start time)"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a point in time that defines a sequence between 'predecessor' and 'successor' timeslot(s)"
+          }
+        },
+        {
+          "schema": "",
+          "table": "teamup",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "round_id",
+              "type": "uuid"
+            },
+            {
+              "name": "dance_id",
+              "type": "uuid"
+            },
+            {
+              "name": "heat_number",
+              "type": "int",
+              "default": "1"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a judged party, e.g. a couple (one participant) or a temporary Jack & Jill team (two participants), dancing in a heat"
+          }
+        },
+        {
+          "schema": "",
+          "table": "timeslot",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null iff competition-related (including non-judged, like intro or GL)"
+              }
+            },
+            {
+              "name": "round_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null iff round-related (including non-judged, like GL) and round exists"
+              }
+            },
+            {
+              "name": "kind",
+              "type": "timeslot_kind"
+            },
+            {
+              "name": "round_kind",
+              "type": "round_kind",
+              "nullable": true,
+              "comment": {
+                "text": "iff kind = round"
+              }
+            },
+            {
+              "name": "status",
+              "type": "timeslot_status"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "num_dances",
+              "type": "int"
+            },
+            {
+              "name": "num_heats",
+              "type": "int"
+            },
+            {
+              "name": "heat_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected duration of a heat, in seconds"
+              }
+            },
+            {
+              "name": "buffer_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected buffer time for set-up and finishing, in seconds"
+              }
+            },
+            {
+              "name": "expected_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "expected duration of the timeslot, in seconds"
+              }
+            },
+            {
+              "name": "actual_duration_s",
+              "type": "int",
+              "comment": {
+                "text": "actual duration of the timeslot, in seconds"
+              }
+            },
+            {
+              "name": "predecessor_syncpoint_id",
+              "type": "uuid",
+              "comment": {
+                "text": "this timeslot starts with the given syncpoint"
+              }
+            },
+            {
+              "name": "successor_syncpoint_id",
+              "type": "uuid",
+              "comment": {
+                "text": "this triggers the given syncpoint"
+              }
+            },
+            {
+              "name": "note",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a schedule entry, something that occupies a time period on one or more floors"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "name": "",
+          "src": {
+            "table": ".organization_external_id",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".federation",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".flooring_type",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_type",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_discipline",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_form",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_order",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_type",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".age_group",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".start_class",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".league",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".dance",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".dance",
+            "column": "competition_discipline_id"
+          },
+          "ref": {
+            "table": ".competition_discipline",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".event",
+            "column": "federation_id"
+          },
+          "ref": {
+            "table": ".federation",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".event",
+            "column": "host_organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".event",
+            "column": "organizer_organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".event_external_id",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".hall",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".floor",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".floor",
+            "column": "hall_id"
+          },
+          "ref": {
+            "table": ".hall",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".floor",
+            "column": "flooring_type_id"
+          },
+          "ref": {
+            "table": ".flooring_type",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant",
+            "column": "participant_type_id"
+          },
+          "ref": {
+            "table": ".participant_type",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_external_id",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_member",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_member",
+            "column": "person_id"
+          },
+          "ref": {
+            "table": ".person",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_member",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "competition_type_id"
+          },
+          "ref": {
+            "table": ".competition_type",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "competition_discipline_id"
+          },
+          "ref": {
+            "table": ".competition_discipline",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "competition_form_id"
+          },
+          "ref": {
+            "table": ".competition_form",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "competition_order_id"
+          },
+          "ref": {
+            "table": ".competition_order",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "participant_type_id"
+          },
+          "ref": {
+            "table": ".participant_type",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "league_id"
+          },
+          "ref": {
+            "table": ".league",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".age_group",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".start_class",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".floor",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_dance",
+            "column": "competition_id"
+          },
+          "ref": {
+            "table": ".competition",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_dance",
+            "column": "dance_id"
+          },
+          "ref": {
+            "table": ".dance",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".competition_dance",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".participant_status_event",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".round",
+            "column": "competition_id"
+          },
+          "ref": {
+            "table": ".competition",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".round",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".floor",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".teamup",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".teamup",
+            "column": "dance_id"
+          },
+          "ref": {
+            "table": ".dance",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".teamup",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".judge_employment",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".judge_employment",
+            "column": "floor_id"
+          },
+          "ref": {
+            "table": ".floor",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".mark",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".mark",
+            "column": "dance_id"
+          },
+          "ref": {
+            "table": ".dance",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".evaluation",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".evaluation",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".evaluation",
+            "column": "result_log_id"
+          },
+          "ref": {
+            "table": ".result_log",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".result",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".result",
+            "column": "participant_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".result",
+            "column": "start_class_id"
+          },
+          "ref": {
+            "table": ".start_class",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".result",
+            "column": "age_group_id"
+          },
+          "ref": {
+            "table": ".age_group",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".result",
+            "column": "result_log_id"
+          },
+          "ref": {
+            "table": ".result_log",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "competition_id"
+          },
+          "ref": {
+            "table": ".competition",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "round_id"
+          },
+          "ref": {
+            "table": ".round",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "predecessor_syncpoint_id"
+          },
+          "ref": {
+            "table": ".syncpoint",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "successor_syncpoint_id"
+          },
+          "ref": {
+            "table": ".syncpoint",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".timeslot",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".floor",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".syncpoint",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "idspace_id"
+          },
+          "ref": {
+            "table": ".idspace",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "tas_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "tas_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "tas_id"
+          },
+          "ref": {
+            "table": ".competition",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "tas_id"
+          },
+          "ref": {
+            "table": ".participant",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".external",
+            "column": "tas_id"
+          },
+          "ref": {
+            "table": ".person",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".idspace",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        }
+      ],
+      "types": [
+        {
+          "schema": "",
+          "name": "competition_status_type",
+          "value": {
+            "enum": [
+              "planned",
+              "ready",
+              "running",
+              "completed",
+              "aborted",
+              "canceled"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "external_kind",
+          "value": {
+            "enum": [
+              "organization",
+              "event",
+              "competition",
+              "participant",
+              "person"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "judge_employment_status",
+          "value": {
+            "enum": [
+              "absent",
+              "present",
+              "completed"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "mark_kind",
+          "value": {
+            "enum": [
+              "selection",
+              "placement",
+              "score",
+              "lift",
+              "disqualification",
+              "absent",
+              "interrupt"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "organization_kind",
+          "value": {
+            "enum": [
+              "club",
+              "regional_association",
+              "federation",
+              "other"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "participant_member_role",
+          "value": {
+            "enum": [
+              "unspecified",
+              "lead",
+              "follow"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "participant_status",
+          "value": {
+            "enum": [
+              "registered",
+              "withdrawn",
+              "present",
+              "started",
+              "completed",
+              "disqualified",
+              "canceled"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "person_sex",
+          "value": {
+            "enum": [
+              "not_known",
+              "male",
+              "female",
+              "non_binary",
+              "not_applicable"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "round_kind",
+          "value": {
+            "enum": [
+              "general_look",
+              "classification",
+              "preliminary",
+              "redance",
+              "intermediate",
+              "semifinal",
+              "final",
+              "placement",
+              "tie_breaker"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "round_status",
+          "value": {
+            "enum": [
+              "planned",
+              "ready",
+              "running",
+              "paused",
+              "completed",
+              "published",
+              "canceled"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "timeslot_kind",
+          "value": {
+            "enum": [
+              "other",
+              "intro",
+              "practice",
+              "presentation",
+              "awards",
+              "break",
+              "goodbye",
+              "round"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "name": "timeslot_status",
+          "value": {
+            "enum": [
+              "planned",
+              "ready",
+              "running",
+              "completed",
+              "canceled"
+            ]
+          }
+        }
+      ],
+      "createdAt": 1784739101455,
+      "updatedAt": 1784883593023
+    },
+    {
+      "id": "d849be31-cf5d-4e3d-814e-a03dcf8e043e",
+      "name": "accounts-marek",
+      "kind": {
+        "kind": "AmlEditor"
+      },
+      "content": [
+        "account",
+        "  id uuid pk",
+        "  event_id uuid -> event(id) ",
+        "  login varchar | should use email address for personal accounts",
+        "  password_hash varchar ",
+        "  password_salt varchar",
+        "  password_text varchar nullable | non-null only permitted for non-personal accounts",
+        "  person_id uuid nullable -> person(id) | null only permitted for event-specific accounts",
+        "  organization_id uuid nullable -> organization | non-null only permitted for global accounts",
+        "",
+        "role | config: a role configured for a spefic organization, or a global one",
+        "  id uuid pk",
+        "  name varchar",
+        "  description text",
+        "  organization_id uuid nullable -> organization(id) | null: global role, non-null: organization-specific role",
+        "",
+        "role_scope | a role assignment to an account",
+        "  id uuid pk",
+        "  account_id uuid -> account",
+        "  role_id uuid -> role",
+        "  competition_id uuid nullable -> competition | null: event scope, non-null: competition scope",
+        "  floor_id uuid nullable -> floor | only relevant for judges (classical cases: null)",
+        "",
+        "license | config: a license configured for a specific organization, or a global one",
+        "  id uuid pk",
+        "  name varchar",
+        "  description text",
+        "  organization_id uuid nullable -> organization(id) | null: global license, non-null: organization-specific license",
+        "",
+        "rel person <> license | a license assigned to a person",
+        "",
+        "permission | config: a configured permission ",
+        "  id uuid pk",
+        "  event_id uuid -> event",
+        "  name varchar unique | used by backend code to look-up a permission",
+        "  description text",
+        "",
+        "rel role <> permission | config: a permission assigned to a role",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "tables": [
+        {
+          "schema": "",
+          "table": "account",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "login",
+              "type": "varchar",
+              "comment": {
+                "text": "should use email address for personal accounts"
+              }
+            },
+            {
+              "name": "password_hash",
+              "type": "varchar"
+            },
+            {
+              "name": "password_salt",
+              "type": "varchar"
+            },
+            {
+              "name": "password_text",
+              "type": "varchar",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only permitted for non-personal accounts"
+              }
+            },
+            {
+              "name": "person_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null only permitted for event-specific accounts"
+              }
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "non-null only permitted for global accounts"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          }
+        },
+        {
+          "schema": "",
+          "table": "license",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "description",
+              "type": "text"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: global license, non-null: organization-specific license"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "config: a license configured for a specific organization, or a global one"
+          }
+        },
+        {
+          "schema": "",
+          "table": "permission",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "event_id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar",
+              "comment": {
+                "text": "used by backend code to look-up a permission"
+              }
+            },
+            {
+              "name": "description",
+              "type": "text"
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "uniques": [
+            {
+              "name": "permission_name_unique_az",
+              "columns": [
+                "name"
+              ]
+            }
+          ],
+          "comment": {
+            "text": "config: a configured permission"
+          }
+        },
+        {
+          "schema": "",
+          "table": "role",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "name",
+              "type": "varchar"
+            },
+            {
+              "name": "description",
+              "type": "text"
+            },
+            {
+              "name": "organization_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: global role, non-null: organization-specific role"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "config: a role configured for a spefic organization, or a global one"
+          }
+        },
+        {
+          "schema": "",
+          "table": "role_scope",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "account_id",
+              "type": "uuid"
+            },
+            {
+              "name": "role_id",
+              "type": "uuid"
+            },
+            {
+              "name": "competition_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "null: event scope, non-null: competition scope"
+              }
+            },
+            {
+              "name": "floor_id",
+              "type": "uuid",
+              "nullable": true,
+              "comment": {
+                "text": "only relevant for judges (classical cases: null)"
+              }
+            }
+          ],
+          "primaryKey": {
+            "columns": [
+              "id"
+            ]
+          },
+          "comment": {
+            "text": "a role assignment to an account"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "event_id"
+          },
+          "ref": {
+            "table": ".event",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".account",
+            "column": "person_id"
+          },
+          "ref": {
+            "table": ".person",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role_scope",
+            "column": "account_id"
+          },
+          "ref": {
+            "table": ".account",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role_scope",
+            "column": "role_id"
+          },
+          "ref": {
+            "table": ".role",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".license",
+            "column": "organization_id"
+          },
+          "ref": {
+            "table": ".organization",
+            "column": "id"
+          }
+        },
+        {
+          "name": "",
+          "src": {
+            "table": ".role",
+            "column": "id"
+          },
+          "ref": {
+            "table": ".permission",
+            "column": "id"
+          }
+        }
+      ],
+      "enabled": false,
+      "createdAt": 1784886473994,
+      "updatedAt": 1784887457212
+    }
+  ],
+  "layouts": {
+    "full": {
+      "tables": [
+        {
+          "id": ".timeslot",
+          "position": {
+            "left": 4210,
+            "top": 130
+          },
+          "size": {
+            "width": 285.75,
+            "height": 429
+          },
+          "color": "fuchsia",
+          "columns": [
+            "id",
+            "event_id",
+            "predecessor_syncpoint_id",
+            "successor_syncpoint_id",
+            "competition_id",
+            "round_id",
+            "kind",
+            "status",
+            "name",
+            "num_dances",
+            "num_heats",
+            "heat_duration_s",
+            "buffer_duration_s",
+            "expected_duration_s",
+            "actual_duration_s"
+          ]
+        },
+        {
+          "id": ".teamup",
+          "position": {
+            "left": 3210,
+            "top": 900
+          },
+          "size": {
+            "width": 162.453125,
+            "height": 141
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "round_id",
+            "dance_id",
+            "heat_number"
+          ]
+        },
+        {
+          "id": ".syncpoint",
+          "position": {
+            "left": 3740,
+            "top": 120
+          },
+          "size": {
+            "width": 210.265625,
+            "height": 165
+          },
+          "color": "fuchsia",
+          "columns": [
+            "id",
+            "event_id",
+            "time",
+            "earliest_time",
+            "note"
+          ]
+        },
+        {
+          "id": ".round",
+          "position": {
+            "left": 2740,
+            "top": 1320
+          },
+          "size": {
+            "width": 188.265625,
+            "height": 213
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "competition_id",
+            "number",
+            "kind",
+            "status",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".result_log",
+          "position": {
+            "left": 3690,
+            "top": 890
+          },
+          "size": {
+            "width": 230.25,
+            "height": 189
+          },
+          "color": "gray",
+          "columns": [
+            "id",
+            "dsl_hash",
+            "account_id",
+            "client_id",
+            "calculated_time",
+            "result_hash"
+          ]
+        },
+        {
+          "id": ".result",
+          "position": {
+            "left": 3760,
+            "top": 1270
+          },
+          "size": {
+            "width": 197.875,
+            "height": 261
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "round_id",
+            "participant_id",
+            "start_class_id",
+            "age_group_id",
+            "is_final",
+            "place_from",
+            "place_to",
+            "result_log_id"
+          ]
+        },
+        {
+          "id": ".participant_status_event",
+          "position": {
+            "left": 2130,
+            "top": 200
+          },
+          "size": {
+            "width": 287.171875,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "id",
+            "participant_id",
+            "new_status",
+            "occurrence_time",
+            "reason"
+          ]
+        },
+        {
+          "id": ".mark",
+          "position": {
+            "left": 3760,
+            "top": 490
+          },
+          "size": {
+            "width": 198.8125,
+            "height": 213
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "participant_id",
+            "dance_id",
+            "account_id",
+            "kind",
+            "value",
+            "reason"
+          ]
+        },
+        {
+          "id": ".judge_employment",
+          "position": {
+            "left": 3860,
+            "top": 1560
+          },
+          "size": {
+            "width": 281.25,
+            "height": 261
+          },
+          "color": "red",
+          "columns": [
+            "id",
+            "round_id",
+            "floor_id",
+            "account_id",
+            "status",
+            "confirmed_dances_count",
+            "position_code",
+            "draw_order",
+            "last_active"
+          ]
+        },
+        {
+          "id": ".idspace",
+          "position": {
+            "left": 130,
+            "top": 1850
+          },
+          "size": {
+            "width": 161.515625,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "id",
+            "event_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".external",
+          "position": {
+            "left": 130,
+            "top": 1610
+          },
+          "size": {
+            "width": 174.640625,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "tas_id",
+            "idspace_id",
+            "kind",
+            "external_id",
+            "note"
+          ]
+        },
+        {
+          "id": ".evaluation",
+          "position": {
+            "left": 3380,
+            "top": 1520
+          },
+          "size": {
+            "width": 192.703125,
+            "height": 213
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "round_id",
+            "participant_id",
+            "result_log_id",
+            "key_path",
+            "value",
+            "reason"
+          ]
+        },
+        {
+          "id": ".start_class",
+          "position": {
+            "left": 2510,
+            "top": 2060
+          },
+          "size": {
+            "width": 176.703125,
+            "height": 189
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "code",
+            "name",
+            "sort_order",
+            "note"
+          ]
+        },
+        {
+          "id": ".person",
+          "position": {
+            "left": 2400,
+            "top": 1620
+          },
+          "size": {
+            "width": 196.71875,
+            "height": 237
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "given_name",
+            "surname",
+            "display_name",
+            "title",
+            "surname_prefix",
+            "sex",
+            "nationality_code"
+          ]
+        },
+        {
+          "id": ".participant_type",
+          "position": {
+            "left": 1340,
+            "top": 1590
+          },
+          "size": {
+            "width": 211.78125,
+            "height": 165
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".participant_member",
+          "position": {
+            "left": 2670,
+            "top": 700
+          },
+          "size": {
+            "width": 326.25,
+            "height": 213
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "participant_id",
+            "person_id",
+            "organization_id",
+            "member_no",
+            "member_role",
+            "is_primary_number_carrier"
+          ]
+        },
+        {
+          "id": ".participant_external_id",
+          "position": {
+            "left": 400,
+            "top": 1690
+          },
+          "size": {
+            "width": 252.421875,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "id",
+            "participant_id",
+            "source_system",
+            "external_id",
+            "note"
+          ]
+        },
+        {
+          "id": ".participant",
+          "position": {
+            "left": 2130,
+            "top": 530
+          },
+          "size": {
+            "width": 238.890625,
+            "height": 189
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "event_id",
+            "participant_type_id",
+            "display_name",
+            "status",
+            "note"
+          ]
+        },
+        {
+          "id": ".organization_external_id",
+          "position": {
+            "left": 40,
+            "top": 2120
+          },
+          "size": {
+            "width": 287.328125,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "id",
+            "organization_id",
+            "source_system",
+            "external_id",
+            "note"
+          ]
+        },
+        {
+          "id": ".organization",
+          "position": {
+            "left": 1400,
+            "top": 2530
+          },
+          "size": {
+            "width": 205.109375,
+            "height": 189
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "code",
+            "kind",
+            "name",
+            "short_name",
+            "note"
+          ]
+        },
+        {
+          "id": ".league",
+          "position": {
+            "left": 2740,
+            "top": 2070
+          },
+          "size": {
+            "width": 192,
+            "height": 189
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "code",
+            "competition_year",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".hall",
+          "position": {
+            "left": 3660,
+            "top": 2120
+          },
+          "size": {
+            "width": 167.984375,
+            "height": 165
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "event_id",
+            "name",
+            "abbreviation",
+            "note"
+          ]
+        },
+        {
+          "id": ".flooring_type",
+          "position": {
+            "left": 2640,
+            "top": 2400
+          },
+          "size": {
+            "width": 176.703125,
+            "height": 141
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "code",
+            "name"
+          ]
+        },
+        {
+          "id": ".floor",
+          "position": {
+            "left": 3980,
+            "top": 2040
+          },
+          "size": {
+            "width": 208.953125,
+            "height": 261
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "event_id",
+            "hall_id",
+            "flooring_type_id",
+            "abbreviation",
+            "name",
+            "length_in_meters",
+            "width_in_meters",
+            "note"
+          ]
+        },
+        {
+          "id": ".federation",
+          "position": {
+            "left": 1710,
+            "top": 2380
+          },
+          "size": {
+            "width": 190.734375,
+            "height": 93
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        },
+        {
+          "id": ".event_external_id",
+          "position": {
+            "left": 360,
+            "top": 1990
+          },
+          "size": {
+            "width": 205.8125,
+            "height": 165
+          },
+          "color": "orange",
+          "columns": [
+            "id",
+            "event_id",
+            "source_system",
+            "external_id",
+            "note"
+          ]
+        },
+        {
+          "id": ".event",
+          "position": {
+            "left": 1700,
+            "top": 1200
+          },
+          "size": {
+            "width": 266.5625,
+            "height": 237
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "federation_id",
+            "host_organization_id",
+            "organizer_organization_id",
+            "name",
+            "start_date",
+            "end_date",
+            "note"
+          ]
+        },
+        {
+          "id": ".dance",
+          "position": {
+            "left": 2830,
+            "top": 1720
+          },
+          "size": {
+            "width": 263.046875,
+            "height": 189
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "competition_discipline_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition_type",
+          "position": {
+            "left": 1130,
+            "top": 2040
+          },
+          "size": {
+            "width": 203.59375,
+            "height": 165
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "organization_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition_order",
+          "position": {
+            "left": 2000,
+            "top": 2060
+          },
+          "size": {
+            "width": 212.90625,
+            "height": 165
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "organization_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition_form",
+          "position": {
+            "left": 1740,
+            "top": 2050
+          },
+          "size": {
+            "width": 207.46875,
+            "height": 165
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "organization_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition_discipline",
+          "position": {
+            "left": 730,
+            "top": 2030
+          },
+          "size": {
+            "width": 246.984375,
+            "height": 165
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "organization_id",
+            "code",
+            "name",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition_dance",
+          "position": {
+            "left": 2830,
+            "top": 1060
+          },
+          "size": {
+            "width": 237,
+            "height": 165
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "competition_id",
+            "competition_round_id",
+            "dance_id",
+            "sequence_no",
+            "note"
+          ]
+        },
+        {
+          "id": ".competition",
+          "position": {
+            "left": 2040,
+            "top": 1110
+          },
+          "size": {
+            "width": 269.34375,
+            "height": 309
+          },
+          "color": "green",
+          "columns": [
+            "id",
+            "event_id",
+            "competition_type_id",
+            "competition_discipline_id",
+            "competition_form_id",
+            "competition_order_id",
+            "participant_type_id",
+            "age_group_id",
+            "start_class_id",
+            "league_id",
+            "name",
+            "planned_start_at",
+            "status",
+            "note"
+          ]
+        },
+        {
+          "id": ".age_group",
+          "position": {
+            "left": 2270,
+            "top": 2050
+          },
+          "size": {
+            "width": 176.703125,
+            "height": 213
+          },
+          "color": "blue",
+          "columns": [
+            "id",
+            "federation_id",
+            "code",
+            "name",
+            "min_age",
+            "max_age",
+            "note"
+          ]
+        }
+      ],
+      "createdAt": 1781023272133,
+      "updatedAt": 1784887877491
+    },
+    "x-accounts-marek": {
+      "tables": [
+        {
+          "id": ".person",
+          "position": {
+            "left": 1280,
+            "top": 320
+          },
+          "size": {
+            "width": 196.71875,
+            "height": 237
+          },
+          "color": "sky",
+          "columns": [
+            "id",
+            "given_name",
+            "surname",
+            "display_name",
+            "title",
+            "surname_prefix",
+            "sex",
+            "nationality_code"
+          ]
+        },
+        {
+          "id": ".role_scope",
+          "position": {
+            "left": 720,
+            "top": 410
+          },
+          "size": {
+            "width": 0,
+            "height": 0
+          },
+          "color": "fuchsia",
+          "columns": [
+            "id",
+            "account_id",
+            "role_id",
+            "competition_id",
+            "floor_id"
+          ]
+        },
+        {
+          "id": ".role",
+          "position": {
+            "left": 300,
+            "top": 710
+          },
+          "size": {
+            "width": 0,
+            "height": 0
+          },
+          "color": "fuchsia",
+          "columns": [
+            "id",
+            "organization_id",
+            "name",
+            "description"
+          ]
+        },
+        {
+          "id": ".permission",
+          "position": {
+            "left": 300,
+            "top": 1020
+          },
+          "size": {
+            "width": 0,
+            "height": 0
+          },
+          "color": "cyan",
+          "columns": [
+            "id",
+            "name",
+            "event_id",
+            "description"
+          ]
+        },
+        {
+          "id": ".license",
+          "position": {
+            "left": 1320,
+            "top": 810
+          },
+          "size": {
+            "width": 0,
+            "height": 0
+          },
+          "color": "rose",
+          "columns": [
+            "id",
+            "organization_id",
+            "name",
+            "description"
+          ]
+        },
+        {
+          "id": ".account",
+          "position": {
+            "left": 290,
+            "top": 270
+          },
+          "size": {
+            "width": 0,
+            "height": 0
+          },
+          "color": "pink",
+          "columns": [
+            "id",
+            "event_id",
+            "person_id",
+            "login",
+            "password_hash",
+            "password_salt",
+            "password_text",
+            "organization_id"
+          ]
+        }
+      ],
+      "createdAt": 1784886523995,
+      "updatedAt": 1784887457212
+    }
+  },
+  "createdAt": 1781023333989,
+  "updatedAt": 1784887525678,
+  "version": 2
+}
+
