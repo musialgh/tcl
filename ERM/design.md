@@ -11,13 +11,20 @@
 
 ### Scope and generated code
 
+- Deliver a standalone Python converter usable by other developers without AI
+  agents. Parsing, reconciliation, geometric assignment, error checking, and C#
+  generation must be executable script capabilities, not manual session steps.
 - Generate class skeletons in `Implementation/model.cs`; most attributes have
   not yet been modeled. Use PascalCase for classes and members.
 - Each explicitly modeled entity implemented as an actual entity shall have a
   `Guid Id` primary key.
 - Collection navigations shall use `ICollection<T>`; single-valued navigations
   and foreign keys shall reflect cardinality and optionality.
-- Where possible, leave implementation of association classes to EF Core.
+- Prefer bidirectional skip navigations (`ICollection<T>` on both sides) for
+  binary many-to-many relationships without relationship attributes. Let EF Core
+  manage the join entity without a dedicated C# association class. Use explicit
+  association classes for relationship attributes and ternary relationships.
+  Fluent API configuration does not itself require an association class.
 - Include ERM cardinality constraints in the skeleton wherever possible; identify
   constraints requiring additional configuration or application/database checks.
 - Continuous regeneration after manual development is not required. After
@@ -45,6 +52,10 @@
 - Compare roles and cardinalities independently of arrow order. Report conflicts
   or ambiguous identity for user correction; a missing optional name is not
   itself an error.
+- When a self-relationship has no explicit endpoint roles, generate a directed
+  source/target relationship with a deterministic assignment of ends. No domain
+  distinction between visually upper/lower ends is implied. Do not make the
+  relationship symmetric or automatically insert its reverse.
 - Recognize cardinalities `1`, `0..1`, `1..*`, and `*`. Jointly associate
   all incident relationship endpoints around an entity with all plausible
   cardinality texts using the best geometric combination. Do not use independent
@@ -62,22 +73,316 @@ Support three representations:
    distinguished by a type enum; no separate derived entities. This supports
    `organization` as one actual entity with its derived kinds as enum values.
 
-Expose the strategy as a CLI argument, initially global; per-case configuration
-may be added later. Define integrity constraints and mappings of relationships
-to derived types for each representation before generating it.
+Expose `--virtual-base-strategy` as a global fallback and repeatable
+`--virtual-base <logical-name>=<strategy>` overrides. Supported strategy values
+are `id-and-kind`, `nullable-fks`, and `base-and-kind`. Reject unknown base names,
+unknown strategies, and duplicate/conflicting overrides. The current model uses
+`nullable-fks` as its default, with `organization=base-and-kind`:
+
+`--virtual-base-strategy nullable-fks --virtual-base organization=base-and-kind`
+
+Define integrity constraints and mappings of relationships to derived types
+for each representation before generating it.
 
 ### Remaining choices and document maintenance
 
-Details still to determine in their respective plan steps: namespace, multiline
-identifier normalization and collision handling, unnamed cross-table naming,
-unknown attribute types, one-to-one foreign-key ownership, keys for generated
-association classes, nullable-reference initialization, supporting EF configuration
-scope/location, cardinality ambiguity thresholds, and whether overrides are needed.
+Step 4's current mapping policy and outstanding choices are specified below.
 
 Keep this file as current prompt context. Integrate accepted decisions directly
 into the relevant requirements and update affected plan items and findings.
 Remove superseded statements and resolved issues. Do not retain development
 history or duplicate decision records.
+
+### C# and EF Core mapping policy
+
+Naming and output:
+
+- Put entities, generated enums, and a `TasModelConfiguration.Configure(ModelBuilder)`
+  helper in `Implementation/model.cs`. The host calls this helper from its own
+  `OnModelCreating`; do not generate a production DbContext, connection string,
+  migrations, or dependency-injection setup. The compilation test can supply a
+  minimal test context.
+- Expose `--namespace`, defaulting to `Tas.Model`. Enable nullable reference types
+  in the generated file and use public partial entity classes with public
+  properties. Keep generated code independent of host implicit-usings settings.
+- Apply the logical-name rule first, then PascalCase underscore/whitespace
+  separated words. Preserve abbreviations: `startno_stack` becomes `StartnoStack`,
+  not a guessed `StartNumberStack`. Report collisions after normalization.
+- Use singular type names and plural collection names, with deterministic
+  inflection (`Person` / `People`, `Country` / `Countries`) and explicit naming
+  overrides for collisions. A supplied relationship name prefixes a navigation
+  when needed to distinguish relations to the same type, such as the two
+  timeslot–syncpoint relationships. Preserve original names in source comments.
+- For an unnamed join, join sorted canonical participant type names; the current
+  ternary join becomes `AccountRoleScope`. Require role/name overrides when this
+  cannot distinguish two associations. Do not invent domain roles from arrows.
+- For an unlabeled-role self-relationship diamond, sort its two incident entity
+  connector IDs within the source file to assign technical Source and Target
+  slots. Arrow point reversal leaves those IDs unchanged. For a direct self-loop,
+  use a canonical ordering of the two endpoint geometries and retain any required
+  tie-break in source metadata. This orientation is a storage convention only;
+  ambiguous duplicate self-relationship occurrences still require reconciliation.
+- Generate `Organization.PartOfTargets` and `Organization.PartOfSources` as skip
+  collections, and a `PartOf` join with `SourceOrganizationId` and
+  `TargetOrganizationId`. Do not assert parent/child meaning for either end.
+- Map concrete entity tables to their class names; use PascalCase relationship
+  names for named join tables and the rule above for unnamed joins. Keep names
+  explicit in Fluent API so collection-property changes do not rename tables.
+
+Navigation, foreign-key, and key rules:
+
+| ER relationship | C# representation | EF mapping |
+| --- | --- | --- |
+| Binary one-to-many | Reference and FK on the many side; inverse collection on the one side | `HasOne` / `WithMany` with explicit FK and requiredness |
+| Binary one-to-one | Two references; one FK on the selected dependent | `HasOne` / `WithOne`, explicit dependent and unique FK |
+| Binary many-to-many, no payload | Two skip collections | `HasMany` / `WithMany` / named `UsingEntity`; composite join key |
+| Binary relationship with payload | Explicit association entity with participant references/FKs and payload properties | Individual foreign keys plus uniqueness constraints preserving the original cardinalities |
+| Ternary relationship | Explicit association entity with three participant references/FKs | Three foreign keys; preserve triple identity and any uniqueness implied by multiplicities |
+
+- Initialize collections as `new List<T>()`. Required references use `T` with
+  `= null!;`; optional references use `T?`. A required reference may still be
+  uninitialized before EF loads it; annotations do not perform loading or validation.
+- Use explicit `Guid` / `Guid?` FK properties named `<NavigationName>Id`.
+  Nullability reflects whether the related single-valued endpoint is `1` or
+  `0..1`. A many-side collection minimum is a separate constraint.
+- Model entities and explicit association classes receive `Guid Id`. Pure
+  EF-managed joins use the participant FK tuple as their composite primary key
+  and do not need an additional ID. Explicit associations additionally require
+  unique participant tuples, preserving ER relationship-set semantics.
+- For an explicit binary association with a single-valued endpoint, add uniqueness
+  on the opposite participant's FK. For ternary upper-bound-one endpoints, the
+  other two participant FKs must uniquely determine that endpoint. Do not confuse
+  required participation of an existing association row with required existence
+  of an association row for every entity.
+- The only current one-to-one is person–account (`0..1` / `0..1`). Use
+  `Account.PersonId : Guid?`, `Account.Person : Person?`, and
+  `Person.Account : Account?`, with a unique FK. This is a storage choice;
+  both sides remain independently optional. Future ambiguous one-to-one mappings
+  require an explicit dependent selection rather than source-arrow direction.
+- Configure each relationship once in Fluent API, pairing navigations explicitly.
+  Use `DeleteBehavior.Restrict` initially because lifecycle/cascade semantics are
+  absent from the ERM. Deletion policy may be refined by the host application.
+
+Explicit association classes required by the current source:
+
+| Class | Reason |
+| --- | --- |
+| `ContributesEv` | contribution_type payload |
+| `MarkingEligible` | round_type payload |
+| `ParticipantDefinition` | conjunction_no payload |
+| `ParticipantMember` | person–participant–club triple plus role / seq_no payload |
+| `CompetitorMember` | role payload |
+| `CompStartnoStack` | purpose / number range payload |
+| `CompetitionDance` | seq_no payload |
+| `ContributesCo` | contribution_type payload |
+| `MapsTo` | external_id payload and virtual target |
+| `AccountRoleScope` | account–role–scope triple and virtual target |
+
+Expose collections of these association entities so callers can set their payload
+or third participant. Additional skip navigations alongside binary association
+classes are supported by EF but are not required for the initial skeleton.
+This table does not account for extra association storage that may be required
+when lowering a polymorphic target; validate that after selecting a strategy.
+
+Virtual-base lowering and integrity:
+
+- `id-and-kind`: store a target ID plus target-kind enum for each polymorphic
+  reference. A single ID cannot have an ordinary FK to several different tables;
+  do not generate a fictitious EF navigation to a missing base type. Use scalar
+  properties and explicitly report target-existence/type validation as an
+  application/trigger responsibility. Optional links require both values null
+  or both present; required links require both present and a valid kind.
+- `nullable-fks`: expand each polymorphic reference into one nullable FK and typed
+  reference per allowed concrete target. Generate real FKs and a check constraint
+  requiring exactly one target for a required reference, or zero/one for an
+  optional reference. Collections of polymorphic associations may require an
+  association row carrying this group of alternative targets.
+- `base-and-kind`: emit only the base entity with a kind enum and redirect child
+  references to that table, preserving the intended child kind as a constraint.
+  This is one C# entity, not EF inheritance with derived CLR classes. A FK to the
+  base ID alone cannot enforce the child's kind. Use an alternate `(Id, Kind)`
+  key and a composite FK with a fixed-kind check on the referencing row for a
+  child-specific reference; a general base reference uses the base ID alone.
+  An optional child-specific reference must have both FK components null or
+  both present. Preserve `Id` as the entity primary key.
+- Represent discriminator enums as C# enums stored as integers with explicit
+  values and validity checks initially; PostgreSQL native enum registration is
+  not required. Never accept default zero as a valid kind unless explicitly defined.
+- Expand nested target groups to their actual retained entity types according to
+  the selected strategies. Detect cycles and overlapping collapse groups. Do not
+  deduplicate separate relationship roles merely because they map to the same
+  retained table.
+- Composite uniqueness involving alternative nullable FKs needs strategy-specific
+  indexes (for example, filtered unique indexes per target branch), not a naive
+  unique tuple containing NULLs. Keep surrogate association IDs in those cases.
+- Collection minima (`1..*`), principal-side existence requirements, and target
+  existence in `id-and-kind` mode are not enforced by navigation declarations.
+  Emit explicit diagnostics/TODOs for constraints outside the generated mapping.
+
+Attribute and polymorphic-association handling:
+
+- Preserve untyped attributes as source-linked TODO comments on their owning
+  entity/association class and emit non-blocking `ATTRIBUTE_TYPE_PENDING`
+  diagnostics. Do not generate guessed typed properties. Retain multiline groups
+  intact where attribute boundaries are unknown, and report
+  `ATTRIBUTE_GROUPING_PENDING`. Their presence still requires the association
+  class even though payload properties are deferred.
+- No scalar types are specified for the 13 attribute groups in the current
+  drawings. For example, do not assume role is a string, seq_no is an integer,
+  or external_id is a Guid. Type/grouping overrides may supply this information
+  later; absent overrides do not block a structural skeleton.
+- Each `MapsTo` row has a required `IdspaceId` plus exactly one of its seven
+  nullable target FKs. Add one partial unique index per target branch, on
+  `(IdspaceId, <TargetId>)` with `<TargetId> IS NOT NULL`.
+- Each `AccountRoleScope` row has required `AccountId` and `RoleId` plus exactly
+  one of four nullable scope FKs. Add one partial unique index per branch, on
+  `(AccountId, RoleId, <ScopeTargetId>)` with `<ScopeTargetId> IS NOT NULL`.
+- Each Result's required context, phase, and owner references expands separately
+  into an exactly-one-of-two FK group. Evaluation's owner reference similarly
+  expands into an exactly-one-of-two group. These many-to-one groups do not need
+  per-target uniqueness indexes. Keep distinct navigations and FK names for each
+  group, including inverse collections.
+- For another selected strategy, recalculate association keys and uniqueness
+  from semantic target identity: `(kind, id)` for id-and-kind, or retained base
+  ID for base-and-kind. Validate generated PostgreSQL checks and indexes in
+  step 6; do not regard C# compilation alone as constraint verification.
+
+Current virtual-base mapping:
+
+| Base | Strategy | Result |
+| --- | --- | --- |
+| organization | base-and-kind | One `Organization` entity; `Club` and `Federation` are `OrganizationKind` values, not separate entity classes |
+| result_phase | nullable-fks | Alternatives Round / RoundDance |
+| result_context | nullable-fks | Alternatives Competition / CompetitionCall |
+| result_owner | nullable-fks | Alternatives Competitor / Participant |
+| with_external | nullable-fks | Alternatives Competition / CompetitionCall / Country / Event / Organization / Participant / Person |
+| scope | nullable-fks | Alternatives Competition / Event / Floor / Organization |
+
+The other five base types have no entity classes. A reference to federation or
+club maps to an Organization reference constrained to that kind; a general
+organization reference accepts either. Emit stable explicit `OrganizationKind`
+values (`Club = 1`, `Federation = 2`) and reject other values with a check.
+Do not add a third generic Organization kind without a domain requirement.
+The selected representation retains 41 of the 48 named semantic entity types:
+five virtual bases and two organization-derived types are omitted as classes.
+The ten listed association classes are additional, giving 51 entity classes for
+the current strategy selection. Untyped payloads do not change this count.
+
+Technical references: [EF Core many-to-many mapping](https://learn.microsoft.com/en-us/ef/core/modeling/relationships/many-to-many),
+[one-to-one mapping](https://learn.microsoft.com/en-us/ef/core/modeling/relationships/one-to-one),
+[foreign and principal keys](https://learn.microsoft.com/en-us/ef/core/modeling/relationships/foreign-and-principal-keys),
+and [value conversions](https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions).
+See also [PostgreSQL partial indexes](https://www.postgresql.org/docs/current/indexes-partial.html).
+
+### Intermediate model contract
+
+The converter shall keep source extraction, semantic reconciliation, validation,
+and C# emission separate. The intermediate model is independent of EF storage
+strategy and contains the following records (collections are deterministically
+ordered by semantic key, then source reference):
+
+| Record | Fields and purpose |
+| --- | --- |
+| `SourceRef` | Submodel key, relative source file, element ID. Element IDs are scoped to their file, never assumed globally unique. |
+| `DrawingElement` | Source reference, Excalidraw type, raw geometry/style, group IDs, raw bindings, and text where present. Deleted elements are excluded; the raw input remains available for diagnostics. |
+| `Label` | Source reference, original text, container reference, logical name when applicable, and resolution evidence. Attribute text remains unsplit until interpretation. |
+| `EntityOccurrence` | Rectangle reference, label reference, logical name, owning submodel inferred from the color aliases, local/external status, and canonical entity key. |
+| `Entity` | Logical name as canonical key, owning submodel, definition references, occurrence references, attribute references, and derivation participation. No C# name, foreign key, or storage strategy is assigned here. |
+| `Connector` | Arrow reference, complete point sequence, and two `Endpoint` records. Endpoint indices preserve source access only, not semantic direction. |
+| `Endpoint` | Source endpoint index, raw bound target, resolved shape or null, resolution status (`bound`, `container`, `geometric`, `unresolved`), candidate references, and evidence. |
+| `RelationshipOccurrence` | Diamond reference or direct connector reference, optional label/name, connector references, participant slots, attribute references, and resolution status. |
+| `ParticipantSlot` | Entity occurrence/key, optional role, incident endpoint references, and multiplicity assignment or null. Keep slots distinct even when they refer to the same entity. |
+| `Relationship` | Canonical identity, occurrence references, optional name, participant slots, attributes, and reconciliation status. Unresolved candidates retain source identities and are not prematurely merged. |
+| `AttributeGroup` | Ellipse/label references, raw text, owner candidates or resolved entity/relationship, and optional interpreted attributes/types. Unknown types remain null. |
+| `Derivation` | Triangle reference, base occurrence/key, child occurrence/keys, connector evidence, and resolution status. Base and child roles may remain unresolved until step 3. |
+| `CardinalityLabel` | Text reference, geometry, raw token, parsed lower/upper bounds, and assignment status. An unbounded upper bound is distinct from an unknown assignment. |
+| `MultiplicityAssignment` | Participant slot, cardinality-label reference, bounds, assignment method, score/ambiguity evidence. Populated in step 3. |
+| `Diagnostic` | Stable code, severity, message, all relevant source references, candidate evidence, and affected stage. Errors prevent downstream emission, but do not discard recoverable source data. |
+
+Label resolution and identity:
+
+- Prefer a live text element's `containerId` for shape labels. Cross-check
+  container/back-reference information, but never derive connectivity solely from
+  `boundElements`. Multiple conflicting labels require a diagnostic.
+- Entity and relationship logical names remove layout line breaks and surrounding
+  whitespace while preserving case and other characters. For example,
+  `competitor_status\n_event` becomes `competitor_status_event`. This is a source
+  identity rule, not PascalCase generation. Preserve the raw label and report
+  normalization collisions rather than silently conflating different names.
+- Match external occurrences to the unique local definition by logical name,
+  validating the owner color. Repetition alone is allowed; disagreement in owner
+  or modeled meaning is an error. Relationships present in only one submodel
+  supplement the entity and are not conflicting entity definitions.
+
+Endpoint and geometry resolution:
+
+- Prefer each arrow's live `startBinding`/`endBinding` targets. When a target is
+  text with a valid shape container, retain the raw target and resolve through
+  that container. A free cardinality text is not an entity endpoint.
+- For missing, deleted, or semantically unsuitable targets, keep the endpoint
+  unresolved with geometric candidates for step 3. Do not invent an attachment
+  or interpret a stale back-reference as an additional connection.
+- Retain local connector points, position, angle, dimensions, rounding, and group
+  membership. Compute world-space geometry with the applicable element transform;
+  use rotated shape boundaries rather than only axis-aligned boxes. Group IDs
+  provide context, not parent transforms or semantic identity.
+- Preserve bends and repeated/zero-length points in source data. Geometric
+  scoring uses the nearest non-zero segment when a local endpoint tangent is
+  needed. Geometry fallback must record candidate scores and ambiguity.
+
+Relationship reconciliation is staged. Step 2 groups potential repeated
+representations by participating canonical entities and available names/roles;
+step 3 completes topology and multiplicity validation before a merge is final.
+Use an order-independent multiset of participant identities/roles, retaining
+self-reference slots. Distinct nonempty names/roles remain distinct. A named and
+unnamed occurrence are not automatically equivalent. Compatible anonymous
+occurrences may merge only when their identity is unambiguous; conflicting
+multiplicities are errors, not a reason to silently create separate relations.
+Do not assume every diamond is binary or every rectangle-to-rectangle arrow is
+a relationship: derivation classification precedes final relationship creation.
+
+Virtual bases remain ordinary named semantic entities with separate derivation
+records. Do not collapse children, synthesize foreign keys/enums, or select an
+EF representation in this model. This preserves all three required strategies.
+
+### Connectivity and cardinality algorithm
+
+- Classify derivation connectors before cardinality matching. A triangle's
+  location and orientation identify its base attachment region; connectors
+  leaving that region toward child rectangles are derivation edges. Require
+  unambiguous base/child geometry, retaining the triangle and arrow provenance.
+  Never classify a connector solely because its entity is a virtual base.
+- An ellipse connector attaches attribute text to its entity or relationship
+  owner and receives no entity multiplicity. For each diamond, gather all
+  incident entity slots separately from its attribute attachments. Preserve
+  ternary relationships; do not decompose them into independent binary edges.
+- Cardinalities at an entity endpoint describe how many instances of that entity
+  may participate for the related instance (for a ternary relationship, a fixed
+  combination of the other participants). Thus competition `*` / event `1`
+  means each competition has one event and an event may have many competitions.
+- Construct a bipartite graph of relationship entity-endpoints and candidate
+  cardinality texts. Solve minimum-cost one-to-one assignment jointly across
+  each connected candidate component, including overlapping entity neighborhoods.
+  Solving the entire submodel is equivalent and prevents label reuse globally.
+- Use endpoint-to-label geometry and local connector alignment, with explicit
+  unmatched slots. Keep geometric feasibility limits so an absent nearby label
+  cannot be filled by an unrelated distant label. Report unused labels too.
+- Estimate ambiguity by forbidding each chosen assignment in turn and solving
+  again. A small alternative-cost gap is a diagnostic, not license for arbitrary
+  tie-breaking. Missing cardinalities remain unknown, distinct from `*`.
+- Initial audit parameters for these unrotated exports: candidates within 100
+  drawing units of the text bounding box; cost = endpoint-to-text-center distance
+  plus twice any backward displacement beyond 10 units along the outgoing local
+  connector segment. Unmatched slots cost 10,000; forbidden pairs cost 100,000.
+  Review gaps below 10 or chosen costs above 110. These are audit parameters,
+  not universal confidence guarantees: expose/tune geometric tolerances in the
+  converter and validate scale/rotation behavior with fixtures.
+- Preserve source file, arrow endpoint, and selected text IDs in executable
+  diagnostics/reports. Any source-specific override must explicitly identify the
+  endpoint and value/label; validate it against changed inputs. No override is
+  used in the current audit.
+- Reconcile repeated relationship occurrences only after comparing multiplicities
+  by canonical participant slot. Keep different names and ternary structures.
 
 # References
 * `00-legend-2026-09-08-1616.excalidraw` contains the drawings' legend.
@@ -86,7 +391,9 @@ history or duplicate decision records.
 
 ## Development Plan
 
-Step 1 is complete; steps 2–7 have not been started.
+Steps 1–4 are complete. The mapping policy is under Requirements.
+Steps 5–7 have not started. The executable converter
+remains the step 5 deliverable; audit calculations do not replace it.
 
 ### 1. Establish the input inventory and drawing conventions
 
@@ -108,6 +415,9 @@ are recorded below.
   accidentally processed alongside older versions of the same submodel.
 
 ### 2. Define a normalized intermediate model
+
+Status: complete. The contract is defined under Requirements; current source
+reconciliation results are recorded below.
 
 - Separate Excalidraw parsing, semantic interpretation, validation, and C# emission.
 - Preserve source file and element IDs for entities, relationships, attributes,
@@ -131,6 +441,9 @@ are recorded below.
 
 ### 3. Resolve connectivity and cardinalities
 
+Status: complete. Topology and all endpoint cardinalities are resolved.
+Current results and validation evidence are recorded below.
+
 - Reconstruct direct connections, connections through relationship diamonds,
   attribute attachments, and virtual-base derivation structures. Keep these
   semantic roles distinct before interpreting multiplicities; derive them from
@@ -153,6 +466,10 @@ are recorded below.
   inferred multiplicities to C# navigation and foreign-key generation.
 
 ### 4. Agree on the C# and EF Core mapping policy
+
+Status: complete. Relationship representation, naming/keys, per-base strategies,
+attribute TODO handling, and directed self-relationship mapping are specified in
+Requirements. Implementation and executable validation remain in steps 5–6.
 
 - Resolve the remaining naming, nullability, and namespace details listed in
   Requirements, applying the established PascalCase and output-file rules.
@@ -297,7 +614,8 @@ Drawing conventions verified against the legend and export structures:
   lines, including multiple words or apparent multiple attributes in one ellipse
   (`purpose` / `number range`, `role` / `seq_no`). Preserve original text until
   semantic interpretation; line breaks alone do not define attribute boundaries.
-- All 147 arrows have bindings at both endpoints (294 bound endpoints).
+- All 147 arrows bind at both endpoints to live rectangle, diamond, or ellipse
+  shapes (294 references); none binds to a text element.
 - Six closed, rounded triangular `line` elements occur in black (one), green
   (three), orange (one), and red (one). Their geometry matches the legend's
   derivation marker. They are notation shapes, not relationship connectors:
@@ -316,7 +634,198 @@ Drawing conventions verified against the legend and export structures:
   `competitor` occurrence matching the green definition. Status events concern
   competitors following the domain split of participants and competitors.
 
-No outstanding issues remain from the step 1 inventory checks. The selected
-files and shape counts above remain current.
+### Intermediate-model source audit
 
-Canonical reconciliation and cardinality interpretation have not been performed.
+The 99 rectangle occurrences resolve by logical name to 48 semantic entities:
+48 local definitions and 51 external occurrences. Each has exactly one bound
+label, each external occurrence has a local definition, and all owner colors
+agree using the documented aliases. There are no duplicate local definitions.
+The count includes virtual bases and is not a generated-class count.
+
+| Owner | Canonical logical names |
+| --- | --- |
+| black | organization, federation, club, event |
+| blue | contest_property, mark_property, judging_property, contest_value, mark_value, judging_value, mark_type, marking_type, dance, competition_type, dsl_script |
+| gray | result_log, competitor_status_event, competition_report_event, change_log |
+| green | competitor, participant, mark, evaluation, result, result_phase, result_context, result_owner, judge_employment, startno, startno_stack, competition, competition_call, round, round_dance, teamup |
+| orange | with_external, idspace |
+| purple | timeslot, syncpoint, hall, floor |
+| red | person, country, license, account, role, scope, permission |
+
+The input also contains 18 diamonds, 13 attribute ellipses, six derivation
+markers, and 321 text elements. Arrow endpoint targets comprise 234 rectangles,
+47 diamonds, and 13 ellipses. This is a source-structure inventory;
+these counts do not imply semantic relationship counts.
+
+Some arrow entries in element `boundElements` lists are not reciprocated by the
+referenced arrow's current endpoints (including missing live arrows). Treat these as stale metadata, not additional graph edges or
+errors requiring manual cleanup when valid forward bindings suffice.
+
+### Connectivity and cardinality results
+
+All 147 arrows are classified: 19 derivation connectors, 13 attribute
+attachments, and 115 relationship connectors. The latter represent 77 direct
+relationships and 18 diamond relationships, totaling 95 occurrences. Two diamonds
+are ternary: green `participant_member` (person, participant, club), and the
+unnamed red relationship (role, scope, account). The remaining 16 are binary.
+
+Four repeated direct relationships have matching multiplicities across their
+submodels and merge: competition–event, event–startno_stack, mark–mark_type,
+and judge_employment–judging_value. This yields 91 canonical relationship records
+with all endpoint multiplicities assigned.
+
+| Submodel | Relationship occurrences | Entity-endpoint slots | Cardinality labels assigned |
+| --- | ---: | ---: | ---: |
+| black | 13 | 26 | 26 |
+| blue | 18 | 36 | 36 |
+| gray | 10 | 20 | 20 |
+| green | 36 | 73 | 73 |
+| orange | 2 | 4 | 4 |
+| purple | 10 | 20 | 20 |
+| red | 6 | 13 | 13 |
+
+All 192 cardinality texts are assigned to the 192 relationship entity-endpoints
+without reuse, leftovers, missing assignments, or ambiguity flags under the
+audit parameters.
+
+| Virtual base | Derived types |
+| --- | --- |
+| organization | club, federation |
+| result_phase | round, round_dance |
+| result_context | competition, competition_call |
+| result_owner | competitor, participant |
+| with_external | competition, competition_call, country, event, organization, participant, person |
+| scope | competition, event, floor, organization |
+
+The `with_external` drawing directly lists organization, not federation; the
+organization derivation remains a separate structure. Preserve this nesting.
+Attribute attachments are:
+
+| Submodel | Connected owner and raw attribute-group text (line breaks shown as /) |
+| --- | --- |
+| black | contribution_type — contributes_ev |
+| blue | participant_definition — conjunction_no |
+| blue | dsl_script — purposeround_type_set |
+| blue | marking_eligible — round_type |
+| green | participant_member — roleseq_no |
+| green | comp_startno_stack — purposenumber range |
+| green | seq_no — competition_dance |
+| green | seq_no — round_dance |
+| green | heat_no — teamup |
+| green | mark — heat_no |
+| green | contribution_type — contributes_co |
+| green | role — competitor_member |
+| orange | maps_to — external_id |
+
+Attribute-group labels above identify attachments only; concatenated multiline
+text is not an assertion that it is a single scalar attribute. Original ellipse
+text remains authoritative for step 4.
+
+Validation performed with a temporary Python audit prototype: the assignment
+solver matched exhaustive search on 80 small matrices and passed a greedy-failure
+example. Reversing every arrow's points and swapping endpoint bindings preserved
+all assignments. Alignment penalty weights 0, 1, 2, and 3 gave identical results
+on all seven exports. Assigned pairs passed the stated cost/margin review limits.
+Source-coordinate spot checks covered competition–event in black, pred_sp in
+purple, and the crowded participant edge in green. All current elements have
+zero rotation; rotated and scaled inputs still require converter fixture tests.
+These checks validate this audit, not a delivered production converter.
+
+### Relationship inventory
+
+Each `entity [value]` gives the multiplicity at that entity's endpoint.
+Repeated occurrences are consolidated; diamond names are shown when supplied.
+
+| Submodels | Relationship name | Entity endpoints |
+| --- | --- | --- |
+| black, green | (unnamed) | `competition [*]` — `event [1]` |
+| black, green | (unnamed) | `startno_stack [*]` — `event [1]` |
+| black | (unnamed) | `dance [*]` — `event [1]` |
+| black | (unnamed) | `event [1]` — `hall [*]` |
+| black | (unnamed) | `event [1]` — `syncpoint [*]` |
+| black | (unnamed) | `event [1]` — `person [*]` |
+| black | (unnamed) | `event [1]` — `permission [*]` |
+| black | (unnamed) | `event [1]` — `role [*]` |
+| black | (unnamed) | `event [1]` — `country [*]` |
+| black | (unnamed) | `event [1]` — `account [*]` |
+| black | contributes_ev | `organization [*]` — `event [*]` |
+| black | client | `organization [*]` — `event [1]` |
+| black | part_of | `organization [*]` — `organization [*]` |
+| blue | (unnamed) | `contest_value [*]` — `contest_property [1]` |
+| blue | (unnamed) | `contest_property [*]` — `federation [1]` |
+| blue | (unnamed) | `competition [*]` — `competition_type [*]` |
+| blue | (unnamed) | `competition_type [*]` — `federation [1]` |
+| blue | (unnamed) | `dsl_script [*]` — `competition_type [*]` |
+| blue | (unnamed) | `mark_property [*]` — `federation [1]` |
+| blue | (unnamed) | `mark_value [*]` — `mark_property [1]` |
+| blue | (unnamed) | `judging_value [*]` — `judging_property [1]` |
+| blue | (unnamed) | `mark_type [*]` — `mark_value [1..*]` |
+| blue | (unnamed) | `federation [1]` — `mark_type [*]` |
+| blue, green | (unnamed) | `mark [*]` — `mark_type [1]` |
+| blue | (unnamed) | `mark_type [1..*]` — `marking_type [*]` |
+| blue | (unnamed) | `federation [1]` — `judging_property [*]` |
+| blue, green | (unnamed) | `judge_employment [*]` — `judging_value [*]` |
+| blue | competition_definition | `competition_type [*]` — `contest_value [1..*]` |
+| blue | marking_eligible | `marking_type [*]` — `competition_type [*]` |
+| blue | participant_definition | `contest_value [1..*]` — `participant [*]` |
+| blue | dance_definition | `dance [*]` — `contest_value [1..*]` |
+| gray | (unnamed) | `result_log [*]` — `account [1]` |
+| gray | (unnamed) | `result [*]` — `result_log [1]` |
+| gray | (unnamed) | `evaluation [*]` — `result_log [1]` |
+| gray | (unnamed) | `competitor_status_event [*]` — `competitor [1]` |
+| gray | (unnamed) | `competitor_status_event [*]` — `account [1]` |
+| gray | (unnamed) | `competition_report_event [*]` — `account [1]` |
+| gray | (unnamed) | `change_log [*]` — `account [1]` |
+| gray | (unnamed) | `competition [0..1]` — `competition_report_event [*]` |
+| gray | (unnamed) | `round [0..1]` — `competition_report_event [*]` |
+| gray | (unnamed) | `dance [0..1]` — `competition_report_event [*]` |
+| green | (unnamed) | `startno [*]` — `startno_stack [1]` |
+| green | (unnamed) | `competition [1]` — `competition_call [1..*]` |
+| green | (unnamed) | `competition_call [1]` — `competitor [*]` |
+| green | (unnamed) | `competition [1]` — `round [*]` |
+| green | (unnamed) | `round [1]` — `round_dance [*]` |
+| green | (unnamed) | `round_dance [*]` — `dance [1]` |
+| green | (unnamed) | `judge_employment [1]` — `mark [*]` |
+| green | (unnamed) | `teamup [*]` — `round_dance [1]` |
+| green | (unnamed) | `mark [*]` — `participant [1]` |
+| green | (unnamed) | `participant [*]` — `competitor [1]` |
+| green | (unnamed) | `result_owner [1]` — `result [*]` |
+| green | (unnamed) | `evaluation [*]` — `round [1]` |
+| green | (unnamed) | `result [*]` — `result_context [1]` |
+| green | (unnamed) | `round [*]` — `competitor [*]` |
+| green | (unnamed) | `competition_type [1]` — `competition_call [*]` |
+| green | (unnamed) | `startno [0..1]` — `competitor [*]` |
+| green | (unnamed) | `round [1]` — `judge_employment [*]` |
+| green | (unnamed) | `mark [*]` — `round_dance [1]` |
+| green | (unnamed) | `person [1]` — `judge_employment [*]` |
+| green | (unnamed) | `dance [*]` — `federation [1]` |
+| green | (unnamed) | `result [*]` — `result_phase [1]` |
+| green | (unnamed) | `participant [*]` — `teamup [*]` |
+| green | (unnamed) | `evaluation [*]` — `result_owner [1]` |
+| green | (unnamed) | `competitor [*]` — `club [1]` |
+| green | (unnamed) | `participant [*]` — `startno [0..1]` |
+| green | participant_member | `person [*]` — `participant [*]` — `club [*]` |
+| green | competitor_member | `competitor [*]` — `person [*]` |
+| green | on_stage | `teamup [*]` — `person [*]` |
+| green | comp_startno_stack | `startno_stack [*]` — `competition [*]` |
+| green | competition_dance | `competition [*]` — `dance [*]` |
+| green | contributes_co | `organization [*]` — `competition [*]` |
+| green | governs | `competition [*]` — `federation [1]` |
+| orange | (unnamed) | `idspace [*]` — `federation [1]` |
+| orange | maps_to | `idspace [*]` — `with_external [*]` |
+| purple | (unnamed) | `timeslot [*]` — `floor [*]` |
+| purple | (unnamed) | `floor [1]` — `teamup [*]` |
+| purple | (unnamed) | `round [*]` — `floor [*]` |
+| purple | (unnamed) | `competition [*]` — `floor [*]` |
+| purple | (unnamed) | `floor [1]` — `judge_employment [*]` |
+| purple | (unnamed) | `floor [*]` — `hall [1]` |
+| purple | (unnamed) | `timeslot [*]` — `competition [0..1]` |
+| purple | (unnamed) | `timeslot [*]` — `round [0..1]` |
+| purple | pred_sp | `syncpoint [1]` — `timeslot [*]` |
+| purple | succ_sp | `syncpoint [1]` — `timeslot [*]` |
+| red | (unnamed) | `country [1]` — `person [*]` |
+| red | (unnamed) | `person [0..1]` — `account [0..1]` |
+| red | (unnamed) | `permission [*]` — `role [*]` |
+| red | (unnamed) | `person [1]` — `license [*]` |
+| red | (unnamed) | `license [*]` — `federation [1]` |
+| red | (unnamed) | `role [*]` — `scope [*]` — `account [*]` |
