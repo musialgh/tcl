@@ -9,22 +9,75 @@
 
 ## Requirements
 
-* Navigation items shall be modeled as `ICollection<>`.
-* All entities modeled explicitly in the ERM shall carry an id field of type `guid` as its primary key.
-* For now, only class skeletons shall be generated, for most attributes have not been modeled in the ERM.
-* The submodels are distinguished by color.
-  * External entities have their submodel's color and a dashed outline.
-  * External entities may appear multiple times in a different submodel (to avoid line crossings).
-  * Cardinalities need to be assigned to the closest line ends, for they are not otherwise linked
-    to the lines in the excalidraw drawings. To maximize success, geometric relation between *all*
-    line ends connected to an entity box shall be associated to *all* candidate cardinality texts
-    and best combination of associations used.
-  * Virtual base entities shall not yield separate classs, but be
-    implemented in one of the following ways:
-    * a single foreign key and an enum idientiying the target entity, or
-    * a foreign key field, NULL permitted, for each of the children
-* All model classes shall be implemented in a single C# file,
-  to be placed in directory `Implementation`
+### Scope and generated code
+
+- Generate class skeletons in `Implementation/model.cs`; most attributes have
+  not yet been modeled. Use PascalCase for classes and members.
+- Each explicitly modeled entity implemented as an actual entity shall have a
+  `Guid Id` primary key.
+- Collection navigations shall use `ICollection<T>`; single-valued navigations
+  and foreign keys shall reflect cardinality and optionality.
+- Where possible, leave implementation of association classes to EF Core.
+- Include ERM cardinality constraints in the skeleton wherever possible; identify
+  constraints requiring additional configuration or application/database checks.
+- Continuous regeneration after manual development is not required. After
+  attributes are added, the EF classes become the primary source.
+
+### Drawing interpretation and reconciliation
+
+- Submodels are distinguished by semantic color name, matching the first word
+  of export filenames. Use the PNG table as the reference. Exact RGB matching
+  between Confluence and Excalidraw is unnecessary because their palettes differ.
+- External entities have their owning submodel's color and a dashed outline.
+  Entities may be repeated within or across submodels for readability without
+  creating duplicate semantic entities.
+- All model connectors are headless Excalidraw arrows, used for endpoint
+  connectivity. Start/end order has no semantic direction. Triangular line
+  shapes are derivation notation, not relationship connectors.
+- Conflicting definitions of the same entity name are input errors. Report them
+  for the user to correct rather than resolving them automatically.
+- Relationship diamonds may be unnamed. If a relationship is named, use that
+  name for its respective cross table when one is needed.
+- Merge repeated occurrences of the same relationship across submodels using
+  canonical participating entities plus relationship names and endpoint roles,
+  where present. Preserve distinct relationships between the same entity pair,
+  including self-references; `pred_sp` and `succ_sp` remain separate.
+- Compare roles and cardinalities independently of arrow order. Report conflicts
+  or ambiguous identity for user correction; a missing optional name is not
+  itself an error.
+- Recognize cardinalities `1`, `0..1`, `1..*`, and `*`. Jointly associate
+  all incident relationship endpoints around an entity with all plausible
+  cardinality texts using the best geometric combination. Do not use independent
+  nearest-label guesses or reuse labels across competing endpoints.
+
+### Virtual bases
+
+Support three representations:
+
+1. Separate derived entities with a polymorphic link expressed by one target ID
+   and an enum identifying the target entity type; no separate base entity.
+2. Separate derived entities with one nullable foreign-key field per derived
+   type; no separate base entity.
+3. Only the base is implemented as an actual entity, with derived types
+   distinguished by a type enum; no separate derived entities. This supports
+   `organization` as one actual entity with its derived kinds as enum values.
+
+Expose the strategy as a CLI argument, initially global; per-case configuration
+may be added later. Define integrity constraints and mappings of relationships
+to derived types for each representation before generating it.
+
+### Remaining choices and document maintenance
+
+Details still to determine in their respective plan steps: namespace, multiline
+identifier normalization and collision handling, unnamed cross-table naming,
+unknown attribute types, one-to-one foreign-key ownership, keys for generated
+association classes, nullable-reference initialization, supporting EF configuration
+scope/location, cardinality ambiguity thresholds, and whether overrides are needed.
+
+Keep this file as current prompt context. Integrate accepted decisions directly
+into the relevant requirements and update affected plan items and findings.
+Remove superseded statements and resolved issues. Do not retain development
+history or duplicate decision records.
 
 # References
 * `00-legend-2026-09-08-1616.excalidraw` contains the drawings' legend.
@@ -33,12 +86,12 @@
 
 ## Development Plan
 
-The scope of this phase is planning only. The steps below describe subsequent
-implementation work; they do not authorize implementation as part of this edit.
-This document will remain the shared context for requirements, accepted design
-decisions, significant findings, and implementation progress.
+Step 1 is complete; steps 2–7 have not been started.
 
 ### 1. Establish the input inventory and drawing conventions
+
+Status: complete. Current inventory, conventions, and remaining input issues
+are recorded below.
 
 - Inventory the seven `.excalidraw` files in `Model/`; use the root legend as
   reference data, not as a submodel to convert.
@@ -73,8 +126,8 @@ decisions, significant findings, and implementation progress.
   additional entities.
 - Preserve relationship names and roles. Merge repeated representations of the
   same relationship without collapsing distinct relationships between the same
-  entity pair, including self-references. Apply the accepted relationship-merging
-  rule below; report conflicting definitions or ambiguous identity for correction.
+  entity pair, including self-references. Apply the relationship-merging
+  requirements; report conflicting definitions or ambiguous identity for correction.
 
 ### 3. Resolve connectivity and cardinalities
 
@@ -101,8 +154,8 @@ decisions, significant findings, and implementation progress.
 
 ### 4. Agree on the C# and EF Core mapping policy
 
-- Define namespace, class/property naming, multiline-name normalization, collision
-  handling, nullable-reference conventions, and the output filename.
+- Resolve the remaining naming, nullability, and namespace details listed in
+  Requirements, applying the established PascalCase and output-file rules.
 - Give every explicitly modeled concrete entity a `Guid Id` primary key.
   Generate collection navigations as initialized `ICollection<T>` properties and
   single-valued navigations with requiredness derived from cardinality.
@@ -116,10 +169,10 @@ decisions, significant findings, and implementation progress.
 - Inventory the few modeled attributes. Generate scalar properties only when
   their types are supported by the source or an accepted decision; record unknown
   types instead of guessing domain data.
-- Choose and record a strategy for each virtual base: one target ID plus an enum,
-  or nullable foreign keys to its concrete children. Generate no virtual-base
-  class. Document target validity, exclusivity, and requiredness checks, and the
-  EF/database mapping consequences of the chosen representation.
+- Define mappings for all three virtual-base strategies in the requirements,
+  including a single base entity with an enum and no separate derived entities.
+  Document target validity, exclusivity, requiredness, and the treatment of
+  relationships targeting derived types for each strategy.
 - Determine whether annotations or minimal Fluent API configuration are needed
   for an unambiguous EF model. Keep all generated model classes in one file under
   `Implementation`; agree on the scope/location of any supporting configuration.
@@ -149,7 +202,7 @@ decisions, significant findings, and implementation progress.
   matching gives the wrong result. Test that ambiguity requires a diagnostic or
   explicit override, and that labels cannot be assigned twice.
 - Review a canonical entity/relationship inventory against all seven drawings;
-  confirm that each concrete entity occurs once and each modeled relationship
+  confirm entity counts according to the selected virtual-base strategy and that each modeled relationship
   is represented with the intended multiplicity and roles.
 - Compile the generated file in a minimal compatible .NET/EF Core 10 project and
   validate model construction with the corresponding Npgsql provider. Resolve
@@ -166,24 +219,23 @@ decisions, significant findings, and implementation progress.
   interpretation issues to be explicitly recorded, and the accepted mapping to
   pass the compilation and EF model checks above. Blocking ambiguities must be
   resolved before calling the generated model complete.
-- Update this section's progress and the records below as work proceeds. Record
-  accepted decisions with rationale and consequences; retain superseded decisions
-  with a pointer to their replacement. Record findings with source evidence and
-  their impact on implementation. Keep proposals distinct from accepted decisions.
+- Maintain current progress and useful findings. Integrate accepted decisions
+  directly into Requirements and update affected plan items. Remove resolved
+  issues and superseded statements; do not retain a development history or
+  duplicate decision records.
 
-### Confirmed findings
+### Current findings
 
-- Initial inspection: `Model/` contains seven Excalidraw files, named by color:
+- `Model/` contains seven Excalidraw files, named by color:
   black, blue, gray, green, orange, purple, and red. `Implementation/` is empty.
 - The legend identifies rectangles as entities, dashed rectangles as external
-  entities, diamonds as named relationships, and ellipses as attributes. It also
+  entities, diamonds as optionally named relationships, and ellipses as attributes. It also
   illustrates a virtual base with a derivation connector and two concrete children.
 - The drawings include direct entity connections, relationship diamonds,
   attributes, and repeated entity labels; interpretation must support these
   rather than assume every connector is a simple binary association.
-- The Markdown export loses the Confluence table's background colors. The updated
-  `00-legend-2026-09-08-1616.png` preserves the table and legend, resolving the
-  previously noted missing-color information. Its mapping is:
+- The Markdown export omits table background colors. Use the table in
+  `00-legend-2026-09-08-1616.png` for the following mapping:
 
 | Submodel | Export filename prefix |
 | --- | --- |
@@ -195,48 +247,76 @@ decisions, significant findings, and implementation progress.
 | Logs, Traceability und Turnierprotokoll | `gray` |
 | Externe IDs | `orange` |
 
-### Design decisions and open questions
+### Current input inventory
 
-Accepted clarification (2026-09-08): table colors map by semantic color name to
-export filename prefixes. Exact RGB matching across Confluence and Excalidraw is
-not required because their palettes differ. Use the PNG table as the color
-reference; the Markdown table remains useful for submodel names and links.
+All seven selected exports parse as Excalidraw JSON. Counts below exclude deleted
+elements and count visual occurrences, not canonical entities or generated classes.
+Solid rectangles include virtual-base candidates.
 
-Accepted clarification (2026-09-08): all model connectors are Excalidraw arrows
-without arrowheads, chosen for their endpoint connectivity, which lines do not
-provide. They carry no semantic direction through their start/end ordering.
-Relationship and derivation semantics come from the connected shapes, labels,
-and notation.
+| Selected input (relative to ERM) | Solid rectangles | Dashed rectangles | Arrows |
+| --- | ---: | ---: | ---: |
+| `Model/black-2026-09-08-1557.excalidraw` | 4 | 10 | 19 |
+| `Model/blue-2026-09-08-1558.excalidraw` | 11 | 5 | 25 |
+| `Model/gray-2026-09-08-1558.excalidraw` | 4 | 7 | 10 |
+| `Model/green-2026-09-07-1652.excalidraw` | 16 | 12 | 58 |
+| `Model/orange-2026-09-08-1558.excalidraw` | 2 | 8 | 11 |
+| `Model/purple-2026-09-08-1557.excalidraw` | 4 | 4 | 12 |
+| `Model/red-2026-09-08-1557.excalidraw` | 7 | 5 | 12 |
 
-Resolve and record the remaining decisions during the corresponding steps above:
+Input-selection policy: the table above is the explicit current input set. The
+future CLI must accept explicit paths and require exactly one selected export per
+submodel for a complete conversion. Reject duplicate submodel selections and
+missing files; do not silently choose by modification time or combine revisions.
+Replacing an export requires explicitly updating the selection. Exclude the root
+legend and PNG from conversion input. No converter or CLI is implemented in step 1.
 
-- Canonical entity identities and any conflicting definitions.
-  - conflicts resulting from multiple occurrences of the same entity name shall not
-    be resolved, for they would constitute an error in the input model. 
-    Such error shall be reported and fixed by me.
-  - Accepted relationship-merging rule: merge repeated occurrences of the same
-    relationship across all submodels. Identify relationships by their canonical
-    participating entities together with their relationship names and endpoint
-    roles, where present; the entity pair alone is not sufficient.
-    Preserve distinct relationships between the same entities, including
-    self-references. For example, `pred_sp` and `succ_sp` between `timeslot` and
-    `syncpoint` remain two separate relationships.
-    Compare endpoint roles and cardinalities independently of arrow start/end
-    order. Report conflicting definitions of the same relationship or ambiguous
-    relationship identity for correction by me; do not silently merge them.
-    The same entity or relationship may be repeated in multiple submodels for
-    human readability without creating duplicate semantic entities or relations.
-- Naming/namespace conventions and generated filename.
-  - generated file shall be `model.cs`
-  - naming convention is PascalCase for classes and members
-- Association-class, attribute-type, and one-to-one foreign-key policies.
-  - where possible, implementation of association classes shall be left to EF Core
-- Virtual-base strategy for each relevant base and its integrity constraints.
-  - shall be a CLI argument, a global one for starters, later maybe configurable per case
-- Required EF configuration and the boundary between skeleton generation and
-  database-enforced constraints.
-  - cardinality constraints specified in ERM should be included in the skeleton 
-    wherever possible
-- Ambiguity thresholds and the format of reviewed source-specific overrides.
-  - the converter need not support continuous loop development. The EF classes will serve
-    as the primary source after attributes have been added.
+The observed Excalidraw stroke-color mapping is:
+
+| Semantic submodel color | Observed stroke colors |
+| --- | --- |
+| black | `#1e1e1e` |
+| blue | `#1971c2` |
+| gray | `#868e96` |
+| green | `#2f9e44` |
+| orange | `#f08c00` |
+| purple | `#be4bdb`, `#9c36b5` |
+| red | `#e03131` |
+
+Use these explicit aliases for the current exports. Both purple shades belong to
+the same submodel: local purple rectangles use `#be4bdb`, while external purple
+rectangles in black/red use `#9c36b5`. All observed active element stroke colors
+are covered. Future unknown shades require a diagnostic and reviewed mapping;
+do not assign ownership through an arbitrary nearest-RGB guess.
+
+Drawing conventions verified against the legend and export structures:
+
+- Solid and dashed rectangles distinguish local definitions and external
+  occurrences. Repeated external boxes are present, for example three `person`
+  occurrences and two `club` occurrences in green.
+- Diamonds represent relationships; ellipses carry attribute text. Text may span
+  lines, including multiple words or apparent multiple attributes in one ellipse
+  (`purpose` / `number range`, `role` / `seq_no`). Preserve original text until
+  semantic interpretation; line breaks alone do not define attribute boundaries.
+- All 147 arrows have bindings at both endpoints (294 bound endpoints).
+- Six closed, rounded triangular `line` elements occur in black (one), green
+  (three), orange (one), and red (one). Their geometry matches the legend's
+  derivation marker. They are notation shapes, not relationship connectors:
+  retain them for virtual-base recognition instead of discarding all `line`
+  elements. The three green base rectangles are labeled `result_phase`,
+  `result_context`, and `result_owner` (with line breaks in the source labels).
+- Cardinality texts use the documented tokens. Some texts contain `boundElements`
+  references, including multiple texts referencing the same arrow; these are not
+  reliable endpoint assignments. Retain the planned joint geometric assignment.
+- `pred_sp` and `succ_sp` in purple demonstrate distinct named relationships
+  between the same entities. Preserve both during later merging.
+
+- The gray submodel uses a blue dashed `dance` occurrence (`#1971c2`), matching
+  its blue definition. Its status-event entity is `competitor_status_event`
+  (`competitor_status` / `_event` in the source label), with an external green
+  `competitor` occurrence matching the green definition. Status events concern
+  competitors following the domain split of participants and competitors.
+
+No outstanding issues remain from the step 1 inventory checks. The selected
+files and shape counts above remain current.
+
+Canonical reconciliation and cardinality interpretation have not been performed.

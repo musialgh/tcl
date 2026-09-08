@@ -1939,7 +1939,7 @@
       "width": 200,
       "height": 80,
       "angle": 0,
-      "strokeColor": "#2f9e44",
+      "strokeColor": "#1971c2",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
       "strokeWidth": 2,
@@ -1951,8 +1951,8 @@
       "index": "aFx",
       "roundness": null,
       "seed": 2133990933,
-      "version": 180,
-      "versionNonce": 1773146008,
+      "version": 181,
+      "versionNonce": 1543152984,
       "isDeleted": false,
       "boundElements": [
         {
@@ -1972,7 +1972,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1787127511747,
+      "updated": 1788883122239,
       "link": null,
       "locked": false
     },
@@ -1984,7 +1984,7 @@
       "width": 54.95994567871094,
       "height": 25,
       "angle": 0,
-      "strokeColor": "#2f9e44",
+      "strokeColor": "#1971c2",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
       "strokeWidth": 2,
@@ -1996,11 +1996,11 @@
       "index": "aG",
       "roundness": null,
       "seed": 1528183227,
-      "version": 189,
-      "versionNonce": 1422677480,
+      "version": 190,
+      "versionNonce": 1919876136,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1787127511747,
+      "updated": 1788883122239,
       "link": null,
       "locked": false,
       "text": "dance",
