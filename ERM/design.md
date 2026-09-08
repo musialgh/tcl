@@ -73,7 +73,8 @@ decisions, significant findings, and implementation progress.
   additional entities.
 - Preserve relationship names and roles. Merge repeated representations of the
   same relationship without collapsing distinct relationships between the same
-  entity pair, including self-references.
+  entity pair, including self-references. Apply the accepted relationship-merging
+  rule below; report conflicting definitions or ambiguous identity for correction.
 
 ### 3. Resolve connectivity and cardinalities
 
@@ -210,9 +211,32 @@ and notation.
 Resolve and record the remaining decisions during the corresponding steps above:
 
 - Canonical entity identities and any conflicting definitions.
+  - conflicts resulting from multiple occurrences of the same entity name shall not
+    be resolved, for they would constitute an error in the input model. 
+    Such error shall be reported and fixed by me.
+  - Accepted relationship-merging rule: merge repeated occurrences of the same
+    relationship across all submodels. Identify relationships by their canonical
+    participating entities together with their relationship names and endpoint
+    roles, where present; the entity pair alone is not sufficient.
+    Preserve distinct relationships between the same entities, including
+    self-references. For example, `pred_sp` and `succ_sp` between `timeslot` and
+    `syncpoint` remain two separate relationships.
+    Compare endpoint roles and cardinalities independently of arrow start/end
+    order. Report conflicting definitions of the same relationship or ambiguous
+    relationship identity for correction by me; do not silently merge them.
+    The same entity or relationship may be repeated in multiple submodels for
+    human readability without creating duplicate semantic entities or relations.
 - Naming/namespace conventions and generated filename.
+  - generated file shall be `model.cs`
+  - naming convention is PascalCase for classes and members
 - Association-class, attribute-type, and one-to-one foreign-key policies.
+  - where possible, implementation of association classes shall be left to EF Core
 - Virtual-base strategy for each relevant base and its integrity constraints.
+  - shall be a CLI argument, a global one for starters, later maybe configurable per case
 - Required EF configuration and the boundary between skeleton generation and
   database-enforced constraints.
+  - cardinality constraints specified in ERM should be included in the skeleton 
+    wherever possible
 - Ambiguity thresholds and the format of reviewed source-specific overrides.
+  - the converter need not support continuous loop development. The EF classes will serve
+    as the primary source after attributes have been added.
