@@ -13,7 +13,7 @@
 - Deliver a standalone Python converter usable by other developers without AI
   agents. Parsing, reconciliation, geometric assignment, error checking, and C#
   generation must be executable script capabilities, not manual session steps.
-- Generate class skeletons in `Implementation/model.cs` when an output path is
+- Generate class skeletons in `implementation/model.cs` when an output path is
   explicitly supplied; omitting `--output` performs validation and diagnostics
   only. Most attributes have not yet been modeled. Use PascalCase for classes
   and members.
@@ -106,7 +106,7 @@ history or duplicate decision records.
 Naming and output:
 
 - Put entities, generated enums, and a `ModelConfiguration.Configure(ModelBuilder)`
-  helper in `Implementation/model.cs`. The host calls this helper from its own
+  helper in `implementation/model.cs`. The host calls this helper from its own
   `OnModelCreating`; do not generate a production DbContext, connection string,
   migrations, or dependency-injection setup. The compilation test can supply a
   minimal test context.
@@ -153,7 +153,7 @@ Navigation, foreign-key, and key rules:
 - Use explicit `Guid` / `Guid?` FK properties named `<NavigationName>Id`.
   Nullability reflects whether the related single-valued endpoint is `1` or
   `0..1`. A many-side collection minimum is a separate constraint.
-- Model entities and explicit association classes receive `Guid Id`. Pure
+- model entities and explicit association classes receive `Guid Id`. Pure
   EF-managed joins use the participant FK tuple as their composite primary key
   and do not need an additional ID. Explicit associations additionally require
   unique participant tuples, preserving ER relationship-set semantics.
@@ -414,7 +414,7 @@ implemented. Step 7 has not started.
 Status: complete. Current inventory, conventions, and remaining input issues
 are recorded below.
 
-- Inventory the seven `.excalidraw` files in `Model/`; use the root legend as
+- Inventory the seven `.excalidraw` files in `model/`; use the root legend as
   reference data, not as a submodel to convert.
 - Inspect representative drawings against the legend to identify entity boxes,
   external references, relationship diamonds, attributes, cardinality labels,
@@ -483,7 +483,7 @@ Current results and validation evidence are recorded below.
 
 Status: complete. Relationship representation, naming/keys, per-base strategies,
 attribute TODO handling, and directed self-relationship mapping are specified in
-Requirements. Implementation and executable validation remain in steps 5–6.
+Requirements. implementation and executable validation remain in steps 5–6.
 
 - Resolve the remaining naming, nullability, and namespace details listed in
   Requirements, applying the established PascalCase and output-file rules.
@@ -506,7 +506,7 @@ Requirements. Implementation and executable validation remain in steps 5–6.
   relationships targeting derived types for each strategy.
 - Determine whether annotations or minimal Fluent API configuration are needed
   for an unambiguous EF model. Keep all generated model classes in one file under
-  `Implementation`; agree on the scope/location of any supporting configuration.
+  `implementation`; agree on the scope/location of any supporting configuration.
 - Record constraints that skeletons alone cannot enforce, such as a collection's
   `1..*` minimum, rather than treating them as fully implemented constraints.
 
@@ -519,7 +519,7 @@ parses all seven current exports, validates global entity ownership and duplicat
 definitions, resolves live arrow bindings, performs one-to-one cardinality
 matching with explicit unmatched slots, and writes output atomically only when
 no error diagnostics exist. Warnings are reported and do not prevent output.
-The generated file is `Implementation/model.cs`.
+The generated file is `implementation/model.cs`.
 
 Diagnostics-only invocation from `ERM`:
 
@@ -547,7 +547,7 @@ focused fixtures and every supported virtual-base combination.
   timestamp (including UTC offset) and complete shell-quoted command line. The
   timestamp intentionally changes the file bytes; the model body must otherwise
   remain stable and independent of drawing layout.
-- Write the single C# model file under `Implementation` only after validation
+- Write the single C# model file under `implementation` only after validation
   succeeds; a failed conversion must not replace a valid previous output.
 
 ### 6. Verify against fixtures and the complete model
@@ -582,7 +582,7 @@ database-level checks remain outstanding.
 ### 7. Complete delivery and preserve context
 
 - Deliver the Python converter, necessary configuration/overrides, focused tests,
-  usage instructions, and the generated C# file under `Implementation`.
+  usage instructions, and the generated C# file under `implementation`.
 - Completion requires all seven submodels to be accounted for, unresolved
   interpretation issues to be explicitly recorded, and the accepted mapping to
   pass the compilation and EF model checks above. Blocking ambiguities must be
@@ -594,8 +594,8 @@ database-level checks remain outstanding.
 
 ### Current findings
 
-- `Model/` contains seven Excalidraw files, named by color:
-  black, blue, gray, green, orange, purple, and red. `Implementation/` is empty.
+- `model/` contains seven Excalidraw files, named by color:
+  black, blue, gray, green, orange, purple, and red. `implementation/` is empty.
 - The legend identifies rectangles as entities, dashed rectangles as external
   entities, diamonds as optionally named relationships, and ellipses as attributes. It also
   illustrates a virtual base with a derivation connector and two concrete children.
@@ -623,13 +623,13 @@ Solid rectangles include virtual-base candidates.
 
 | Selected input (relative to ERM) | Solid rectangles | Dashed rectangles | Arrows |
 | --- | ---: | ---: | ---: |
-| `Model/black-2026-09-08-1557.excalidraw` | 4 | 10 | 19 |
-| `Model/blue-2026-09-08-1558.excalidraw` | 11 | 5 | 25 |
-| `Model/gray-2026-09-08-1558.excalidraw` | 4 | 7 | 10 |
-| `Model/green-2026-09-07-1652.excalidraw` | 16 | 12 | 58 |
-| `Model/orange-2026-09-08-1558.excalidraw` | 2 | 8 | 11 |
-| `Model/purple-2026-09-08-1557.excalidraw` | 4 | 4 | 12 |
-| `Model/red-2026-09-08-1557.excalidraw` | 7 | 5 | 12 |
+| `model/black-2026-09-08-1557.excalidraw` | 4 | 10 | 19 |
+| `model/blue-2026-09-08-1558.excalidraw` | 11 | 5 | 25 |
+| `model/gray-2026-09-08-1558.excalidraw` | 4 | 7 | 10 |
+| `model/green-2026-09-07-1652.excalidraw` | 16 | 12 | 58 |
+| `model/orange-2026-09-08-1558.excalidraw` | 2 | 8 | 11 |
+| `model/purple-2026-09-08-1557.excalidraw` | 4 | 4 | 12 |
+| `model/red-2026-09-08-1557.excalidraw` | 7 | 5 | 12 |
 
 Input-selection policy: the table above is the explicit current input set. The
 future CLI must accept explicit paths and require exactly one selected export per

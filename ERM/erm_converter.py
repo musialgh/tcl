@@ -592,12 +592,12 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Convert a selected set of Excalidraw ER submodels into a C# EF Core model skeleton.",
-        epilog="Inputs default to Model/*.excalidraw. Diagnostics are always printed to stdout. "
+        epilog="Inputs default to model/*.excalidraw. Diagnostics are always printed to stdout. "
                "The converter validates the input even when --output is omitted; omit --output "
                "to perform a diagnostics-only run.",
         formatter_class=HelpFormatter)
     ap.add_argument("inputs", nargs="*", type=Path,
-                    help="Excalidraw export paths (one export per color; default: Model/*.excalidraw).")
+                    help="Excalidraw export paths (one export per color; default: model/*.excalidraw).")
     ap.add_argument("-o", "--output", type=Path, metavar="FILE",
                     help="write generated C# to FILE; if omitted, do not generate a model file.")
     ap.add_argument("-n", "--namespace", default="GeneratedModel", metavar="NAME",
@@ -612,7 +612,7 @@ def main(argv=None):
                          "  nullable-fks  one nullable FK per target type\n"
                          "  base-and-kind one base entity plus a type enum")
     args = ap.parse_args(argv)
-    paths = args.inputs or sorted(Path("Model").glob("*.excalidraw")); diagnostics=[]
+    paths = args.inputs or sorted(Path("model").glob("*.excalidraw")); diagnostics=[]
     overrides={}
     virtual_base_strategy = "nullable-fks"
     default_seen = False
