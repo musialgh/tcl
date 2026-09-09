@@ -353,14 +353,16 @@ result_log {color: gray} |||
   result_hash varchar nullable   | hash of the result data used for calculation (nullable since record must be created *before* calculation)
   account_id uuid -> account     | user account that triggered the calculation
   machine_id varchar             | id of client machine from which the calculation was triggered
-  calculated_time timestamp      | timestamp of the calculation
+  calculation_time timestamp     | timestamp of the calculation
 
 participant_status_event {color: gray} | Stores status changes such as registration, check-in, withdrawal, disqualification, cancellation, and corrections.
   id uuid pk
   participant_id uuid -> participant
   new_status participant_status
   reason text nullable | mandatory for changes relevant to competition report
-  occurrence_time timestamp
+  account_id uuid -> account | user account that triggered the operation
+  machine_id varchar         | id of client machine from which the calculation was triggered
+ occurrence_time timestamp
 
 writelog {color: gray} | log of all write operations, also suitable for sync and backup features
   access_time timestamp index | no guuid for efficiency -- index by time is minimum

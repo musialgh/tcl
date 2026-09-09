@@ -20,8 +20,10 @@
 - Diagnostics are always printed to standard output. The CLI intentionally has
   no separate verbosity flag: normal output is limited to actionable diagnostics
   and one generation/status line, while `-h` documents all options.
-- Each explicitly modeled entity implemented as an actual entity shall have a
-  `Guid Id` primary key.
+- Each explicitly modeled entity implemented as an actual entity shall inherit
+  its `Guid Id` primary key from a common generated base class. Expose
+  `-e/--entity_base NAME`, defaulting to `EntityBase`, to name this class. The
+  base is the extension point for later shared behavior such as soft deletion.
 - Collection navigations shall use `ICollection<T>`; single-valued navigations
   and foreign keys shall reflect cardinality and optionality.
 - Prefer bidirectional skip navigations (`ICollection<T>` on both sides) for
@@ -103,12 +105,12 @@ history or duplicate decision records.
 
 Naming and output:
 
-- Put entities, generated enums, and a `TasModelConfiguration.Configure(ModelBuilder)`
+- Put entities, generated enums, and a `ModelConfiguration.Configure(ModelBuilder)`
   helper in `Implementation/model.cs`. The host calls this helper from its own
   `OnModelCreating`; do not generate a production DbContext, connection string,
   migrations, or dependency-injection setup. The compilation test can supply a
   minimal test context.
-- Expose `--namespace`, defaulting to `Tas.Model`. Enable nullable reference types
+- Expose `-n/--namespace`, defaulting to `GeneratedModel`. Enable nullable reference types
   in the generated file and use public partial entity classes with public
   properties. Keep generated code independent of host implicit-usings settings.
 - Apply the logical-name rule first, then PascalCase underscore/whitespace
@@ -145,7 +147,7 @@ Navigation, foreign-key, and key rules:
 | Binary relationship with payload | Explicit association entity with participant references/FKs and payload properties | Individual foreign keys plus uniqueness constraints preserving the original cardinalities |
 | Ternary relationship | Explicit association entity with three participant references/FKs | Three foreign keys; preserve triple identity and any uniqueness implied by multiplicities |
 
-- Initialize collections as `new List<T>()`. Required references use `T` with
+- Initialize collections with C# collection expressions (`= [];`). Required references use `T` with
   `= null!;`; optional references use `T?`. A required reference may still be
   uninitialized before EF loads it; annotations do not perform loading or validation.
 - Use explicit `Guid` / `Guid?` FK properties named `<NavigationName>Id`.
@@ -183,6 +185,10 @@ Explicit association classes required by the current source:
 | `ContributesCo` | contribution_type payload |
 | `MapsTo` | external_id payload and virtual target |
 | `AccountRoleScope` | account–role–scope triple and virtual target |
+| `ResultResultOwner` | nullable-FK lowering of a polymorphic result owner |
+| `ResultResultContext` | nullable-FK lowering of a polymorphic result context |
+| `ResultResultPhase` | nullable-FK lowering of a polymorphic result phase |
+| `EvaluationResultOwner` | nullable-FK lowering of a polymorphic evaluation owner |
 
 Expose collections of these association entities so callers can set their payload
 or third participant. Additional skip navigations alongside binary association
@@ -227,12 +233,13 @@ Virtual-base lowering and integrity:
 
 Attribute and polymorphic-association handling:
 
-- Preserve untyped attributes as source-linked TODO comments on their owning
-  entity/association class and emit non-blocking `ATTRIBUTE_TYPE_PENDING`
-  diagnostics. Do not generate guessed typed properties. Retain multiline groups
-  intact where attribute boundaries are unknown, and report
-  `ATTRIBUTE_GROUPING_PENDING`. Their presence still requires the association
-  class even though payload properties are deferred.
+- Preserve untyped attributes as one source-linked `// Attribute: <name>` line
+  per attribute on their owning entity/association class and emit non-blocking
+  `ATTRIBUTE_TYPE_PENDING` diagnostics. A nonempty source line starts a new
+  attribute unless it starts with `_`; an underscore-prefixed line is appended
+  to the preceding attribute name. Do not generate guessed typed properties.
+  Their presence still requires the association class even though payload
+  properties are deferred.
 - No scalar types are specified for the 13 attribute groups in the current
   drawings. For example, do not assume role is a string, seq_no is an integer,
   or external_id is a Guid. Type/grouping overrides may supply this information
@@ -271,8 +278,10 @@ values (`Club = 1`, `Federation = 2`) and reject other values with a check.
 Do not add a third generic Organization kind without a domain requirement.
 The selected representation retains 41 of the 48 named semantic entity types:
 five virtual bases and two organization-derived types are omitted as classes.
-The ten listed association classes are additional, giving 51 entity classes for
-the current strategy selection. Untyped payloads do not change this count.
+The fourteen listed association classes give 55 explicitly generated entity
+classes for the current strategy selection.
+EF additionally creates shared join types for the pure binary many-to-many
+relationships. Untyped payloads do not change the explicit class count.
 
 Technical references: [EF Core many-to-many mapping](https://learn.microsoft.com/en-us/ef/core/modeling/relationships/many-to-many),
 [one-to-one mapping](https://learn.microsoft.com/en-us/ef/core/modeling/relationships/one-to-one),
@@ -396,9 +405,9 @@ EF representation in this model. This preserves all three required strategies.
 
 ## Development Plan
 
-Steps 1–4 are complete. Step 5 is complete as the initial standalone converter
-implementation. Steps 6–7 have not started; generated C# mapping and full EF
-validation remain subject to the verification work in those steps.
+Steps 1–5 are complete. Step 6 has begun with compilation and EF model-building
+checks for the complete current input; its focused fixture suite remains to be
+implemented. Step 7 has not started.
 
 ### 1. Establish the input inventory and drawing conventions
 
@@ -503,13 +512,14 @@ Requirements. Implementation and executable validation remain in steps 5–6.
 
 ### 5. Implement the converter and diagnostics
 
-Status: complete as an initial executable implementation in `erm_converter.py`.
-It accepts explicit export paths, optional `--output`, `--namespace`, and the
-repeatable `-b/--virtual-base` configuration option. It parses all seven current exports,
-validates global entity ownership and duplicate definitions, resolves live arrow
-bindings, performs one-to-one cardinality matching with explicit unmatched slots,
-and writes output atomically only when no error diagnostics exist. Warnings are
-reported and do not prevent output. The generated file is `Implementation/model.cs`.
+Status: complete as an executable implementation in `erm_converter.py`. It
+accepts explicit export paths, optional `-o/--output`, `-n/--namespace`,
+`-e/--entity_base`, and the repeatable `-b/--virtual-base` configuration. It
+parses all seven current exports, validates global entity ownership and duplicate
+definitions, resolves live arrow bindings, performs one-to-one cardinality
+matching with explicit unmatched slots, and writes output atomically only when
+no error diagnostics exist. Warnings are reported and do not prevent output.
+The generated file is `Implementation/model.cs`.
 
 Diagnostics-only invocation from `ERM`:
 
@@ -518,24 +528,38 @@ python3 erm_converter.py
 ```
 
 The implementation always prints diagnostics to standard output and preserves
-source file/element IDs in them. It treats
-stale `boundElements` back-references as metadata, never arrow direction, and
-rejects unknown external colors, missing entity definitions, duplicate local
-definitions, malformed input, and unresolved required input selection. It is a
-usable CLI baseline; step 6 must expand its relationship classification,
-virtual-base lowering, and EF configuration verification against fixtures.
+source file/element IDs in them. It treats stale `boundElements` back-references
+as metadata, never arrow direction, and rejects unknown external colors, missing
+entity definitions, duplicate local definitions, invalid virtual-base selections,
+malformed input, and unresolved required input selection. Generation includes
+cardinality-based navigation nullability, explicit association entities, foreign
+keys, indexes, unique constraints, PostgreSQL check/filter expressions, and
+Fluent API configuration. Step 6 must still exercise these behaviors against
+focused fixtures and every supported virtual-base combination.
 
 - Implement a Python command-line entry point with explicit input, output, and
   override/configuration paths; document invocation and dependencies.
 - Validate the complete intermediate model before emitting code. Give actionable
   diagnostics for unresolved references, unsupported shapes, ambiguous semantics,
   duplicate identifiers, and contradictory relationship definitions.
-- Generate deterministic output with stable ordering, source traceability, and a
-  generated-file notice. Avoid timestamps or ordering dependent on drawing layout.
+- Generate stable semantic ordering, source traceability, and a generated-file
+  notice. Begin the file with a comment block containing the local generation
+  timestamp (including UTC offset) and complete shell-quoted command line. The
+  timestamp intentionally changes the file bytes; the model body must otherwise
+  remain stable and independent of drawing layout.
 - Write the single C# model file under `Implementation` only after validation
   succeeds; a failed conversion must not replace a valid previous output.
 
 ### 6. Verify against fixtures and the complete model
+
+Current complete-model smoke checks pass for the selected per-base mapping, the
+all-`nullable-fks` mapping, and the all-`id-and-kind` mapping: the generated C#
+compiles under .NET 10 and EF builds each model with the installed Npgsql EF Core
+10 provider without connecting to a database. The selected mapping contains 70
+EF model types: 55 explicit CLR entities and 15 shared many-to-many join types.
+An all-`base-and-kind` setting is rejected because overlapping derivations would
+collapse the same concrete types into multiple base tables. Focused fixtures and
+database-level checks remain outstanding.
 
 - Create small, hand-checked fixtures for repeated external entities, rotated or
   unbound connectors, crowded endpoints, ambiguous cardinalities, self-relations,
@@ -639,8 +663,9 @@ Drawing conventions verified against the legend and export structures:
   occurrences and two `club` occurrences in green.
 - Diamonds represent relationships; ellipses carry attribute text. Text may span
   lines, including multiple words or apparent multiple attributes in one ellipse
-  (`purpose` / `number range`, `role` / `seq_no`). Preserve original text until
-  semantic interpretation; line breaks alone do not define attribute boundaries.
+  (`purpose` / `number range`, `role` / `seq_no`). A line beginning with `_`
+  continues the preceding attribute; every other nonempty line starts a new
+  attribute.
 - All 147 arrows bind at both endpoints to live rectangle, diamond, or ellipse
   shapes (294 references); none binds to a text element.
 - Six closed, rounded triangular `line` elements occur in black (one), green
@@ -730,23 +755,24 @@ Attribute attachments are:
 
 | Submodel | Connected owner and raw attribute-group text (line breaks shown as /) |
 | --- | --- |
-| black | contribution_type — contributes_ev |
+| black | contribution / _type → contribution_type — contributes_ev |
 | blue | participant_definition — conjunction_no |
-| blue | dsl_script — purposeround_type_set |
+| blue | dsl_script — purpose / round_type_set |
 | blue | marking_eligible — round_type |
-| green | participant_member — roleseq_no |
-| green | comp_startno_stack — purposenumber range |
+| green | participant_member — role / seq_no |
+| green | comp_startno_stack — purpose / number range |
 | green | seq_no — competition_dance |
 | green | seq_no — round_dance |
 | green | heat_no — teamup |
 | green | mark — heat_no |
-| green | contribution_type — contributes_co |
+| green | contribution / _type → contribution_type — contributes_co |
 | green | role — competitor_member |
 | orange | maps_to — external_id |
 
-Attribute-group labels above identify attachments only; concatenated multiline
-text is not an assertion that it is a single scalar attribute. Original ellipse
-text remains authoritative for step 4.
+Each slash in the table marks a source line break. A line beginning with `_`
+continues the preceding attribute; every other line is a separate attribute.
+The converter preserves each resulting name as its own comment because the
+drawings do not yet specify property types.
 
 Validation performed with a temporary Python audit prototype: the assignment
 solver matched exhaustive search on 80 small matrices and passed a greedy-failure
