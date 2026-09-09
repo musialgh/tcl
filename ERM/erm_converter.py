@@ -18,9 +18,6 @@ import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
-COLORS = {"black": "#1e1e1e", "blue": "#1971c2", "gray": "#868e96",
-          "green": "#2f9e44", "orange": "#f08c00", "purple": "#be4bdb",
-          "red": "#e03131", "purple-alt": "#9c36b5"}
 CARD = {"1": (1, 1), "0..1": (0, 1), "1..*": (1, None), "*": (0, None)}
 CARD_TOKENS = set(CARD)
 
@@ -138,28 +135,47 @@ def hungarian(cost):
 def parse(paths: list[Path], diagnostics: list[Diagnostic]):
     entities: dict[str, Entity] = {}; all_rels: list[Relationship] = []
     derivations: dict[str, list[str]] = {}
-    selected = {p.name.split("-", 1)[0]: p for p in paths}
-    expected = {"black", "blue", "gray", "green", "orange", "purple", "red"}
-    for key in expected - selected.keys(): diagnostics.append(Diagnostic("INPUT_MISSING", f"missing {key} export"))
-    if len(selected) != len(paths): diagnostics.append(Diagnostic("INPUT_DUPLICATE", "more than one export selected for a color"))
     loaded = {}
     for path in paths:
         elements = load(path, diagnostics)
-        if elements is not None: loaded[path] = elements
+        if elements is not None:
+            loaded[path] = elements
+
+    owner_colors: dict[Path, str] = {}
+    color_owners: dict[str, Path] = {}
+    for path, elements in loaded.items():
+        solid_colors = {
+            e.get("strokeColor", "").lower() for e in elements
+            if e.get("type") == "rectangle" and e.get("strokeStyle") == "solid"
+        }
+        if len(solid_colors) != 1:
+            diagnostics.append(Diagnostic(
+                "MODEL_COLOR", f"export has {len(solid_colors)} solid rectangle-border colors; expected exactly one",
+                Ref(path.name, "file")))
+            continue
+        owner_color = solid_colors.pop()
+        if owner_color in color_owners:
+            diagnostics.append(Diagnostic(
+                "MODEL_COLOR_DUPLICATE",
+                f"solid rectangle-border color {owner_color} also owns {color_owners[owner_color].name}",
+                Ref(path.name, "file")))
+            continue
+        owner_colors[path] = owner_color
+        color_owners[owner_color] = path
+
+    for path, elements in loaded.items():
         # Definitions are collected before external occurrences are validated;
         # input order must not affect diagnostics.
-        if elements is not None:
+        if path in owner_colors:
             labels0 = {e["containerId"]: e.get("text", "") for e in elements if e.get("type") == "text" and e.get("containerId")}
             for e in elements:
                 if e.get("type") == "rectangle" and e.get("strokeStyle") == "solid":
-                    n = logical(labels0.get(e["id"], "")); owner_color = COLORS.get(path.name.split("-",1)[0])
+                    n = logical(labels0.get(e["id"], "")); owner_color = owner_colors[path]
                     if not n: continue
                     if n in entities:
                         diagnostics.append(Diagnostic("ENTITY_DUPLICATE", f"duplicate local definition of {n}", Ref(path.name, e["id"])))
-                    else: entities[n] = Entity(n, path.name.split("-",1)[0], Ref(path.name, e["id"]))
-    color_owner = {value: key.replace("-alt", "") for key, value in COLORS.items()}
+                    else: entities[n] = Entity(n, owner_color, Ref(path.name, e["id"]))
     for path in paths:
-        color = path.name.split("-", 1)[0]
         elements = loaded.get(path)
         if elements is None: continue
         ix = {e["id"]: e for e in elements}; labels = {}
@@ -172,17 +188,16 @@ def parse(paths: list[Path], diagnostics: list[Diagnostic]):
             n = label(e)
             if not n:
                 diagnostics.append(Diagnostic("ENTITY_LABEL", "rectangle has no entity label", Ref(path.name, e["id"]))); continue
-            owner_color = COLORS.get(color); observed = e.get("strokeColor", "").lower()
+            observed = e.get("strokeColor", "").lower()
             if e.get("strokeStyle") == "solid":
-                if observed != owner_color and not (color == "purple" and observed == COLORS["purple-alt"]):
-                    diagnostics.append(Diagnostic("ENTITY_COLOR", f"local entity {n} has stroke {observed}, expected {owner_color}", Ref(path.name, e["id"])))
                 # Definitions were collected in a first pass.
+                pass
             else:
-                if observed not in color_owner: diagnostics.append(Diagnostic("COLOR_UNKNOWN", f"unknown external stroke {observed}", Ref(path.name, e["id"])))
+                if observed not in color_owners: diagnostics.append(Diagnostic("COLOR_UNKNOWN", f"external stroke {observed} has no solid-rectangle owner", Ref(path.name, e["id"])))
                 if n in entities:
                     entities[n].occurrences.append(Ref(path.name, e["id"]))
-                    if color_owner.get(observed) != entities[n].owner:
-                        diagnostics.append(Diagnostic("ENTITY_OWNER", f"external entity {n} has owner color {color_owner.get(observed)}, expected {entities[n].owner}", Ref(path.name, e["id"])))
+                    if observed != entities[n].owner:
+                        diagnostics.append(Diagnostic("ENTITY_OWNER", f"external entity {n} has owner color {observed}, expected {entities[n].owner}", Ref(path.name, e["id"])))
                 else: diagnostics.append(Diagnostic("ENTITY_MISSING", f"external entity {n} has no local definition", Ref(path.name, e["id"])))
         cards = [e for e in elements if e.get("type") == "text" and e.get("text", "").strip() in CARD_TOKENS]
         arrows = [e for e in elements if e.get("type") == "arrow"]
@@ -315,10 +330,25 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
     def csharp_string(value):
         return json.dumps(value, ensure_ascii=False)
 
+    def command_comment_lines(value, width=120):
+        """Render a shell-equivalent command in a C-style comment at `width`."""
+        prefix, first, continuation = " * ", "Command: ", "    "
+        lines, current = [], prefix + first
+        for token in shlex.split(value):
+            rendered = shlex.join([token])
+            separator = "" if current == prefix + first else " "
+            if current != prefix + first and len(current) + len(separator) + len(rendered) > width:
+                lines.append(current)
+                current, separator = prefix + continuation, ""
+            current += separator + rendered
+        lines.append(current)
+        return lines
+
     lines = ["/*", f" * Generated: {datetime.now().astimezone().isoformat(timespec='seconds')}",
-             f" * Command: {command.replace('*/', '* /')}", " */", "#nullable enable",
+             *command_comment_lines(command.replace('*/', '* /')), " */", "#nullable enable",
              "using Microsoft.EntityFrameworkCore;", "using System;", "using System.Collections.Generic;", "",
-             f"namespace {namespace};", "", f"public abstract class {entity_base}", "{",
+             f"namespace {namespace};", "", f"public abstract class {entity_base}", "{", "}", "",
+             f"public abstract class {entity_base}WithId : {entity_base}", "{",
              "    public Guid Id { get; set; }", "}", ""]
 
     for base, children in sorted(derivations.items()):
@@ -355,17 +385,23 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
 
     for rel in relationships:
         eps = rel.endpoints
+        binary_many_to_many = (
+            len(eps) == 2
+            and CARD.get(eps[0].card, (0, None))[1] is None
+            and CARD.get(eps[1].card, (0, None))[1] is None
+        )
         virtual_endpoint = any(
             ep.entity in derivations and strategies.get(ep.entity) != "base-and-kind"
             for ep in eps)
-        explicit = len(eps) != 2 or bool(rel.attributes) or virtual_endpoint
+        explicit = len(eps) != 2 or bool(rel.attributes) or virtual_endpoint or binary_many_to_many
         if explicit:
             base_name = pascal(rel.name or "".join(sorted(pascal(ep.entity) for ep in eps)))
             join_name, suffix = base_name, 2
             while join_name in {join["name"] for join in joins}:
                 join_name = f"{base_name}{suffix}"
                 suffix += 1
-            join = {"name": join_name, "fields": [], "fks": [], "shadows": [], "checks": [], "indexes": set()}
+            join = {"name": join_name, "fields": [], "fks": [], "shadows": [], "checks": [],
+                    "indexes": set(), "key": []}
             counts, seen, identities = {}, {}, []
             for ep in eps:
                 counts[ep.entity] = counts.get(ep.entity, 0) + 1
@@ -381,37 +417,52 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                         targets.append(pascal(other.entity))
                 return f"    // relationship {':'.join(cards)} to {', '.join(targets)}"
 
+            def join_reference_comment(entity, cardinality):
+                return f"    // {pascal(entity)} at cardinality {cardinality}"
+
+            def inverse_collection_base(position, role):
+                if len(eps) == 2 and eps[0].entity == eps[1].entity and rel.name:
+                    return pascal(rel.name) + ("Targets" if role == "Source" else "Sources")
+                return plural(join_name)
+
             for position, ep in enumerate(eps):
                 seen[ep.entity] = seen.get(ep.entity, 0) + 1
                 role = (("Source" if seen[ep.entity] == 1 else "Target")
                         if counts[ep.entity] > 1 else "")
                 strategy = strategies.get(ep.entity)
                 if strategy == "nullable-fks":
-                    alternatives, present = [], []
+                    alternatives, present, matching = [], [], []
+                    base_id = role + pascal(ep.entity) + "Id"
+                    join["fields"] += [join_reference_comment(ep.entity, ep.card),
+                                       f"    public Guid {base_id} {{ get; set; }}"]
+                    join["key"].append(base_id)
                     for child in retained_targets(ep.entity):
                         prop_name = role + pascal(child)
                         target_type = type_name(child)
-                        join["fields"] += [explicit_relationship_comment(position),
+                        join["fields"] += [join_reference_comment(child, ep.card),
                                            f"    public Guid? {prop_name}Id {{ get; set; }}",
                                            f"    public {target_type}? {prop_name} {{ get; set; }}"]
-                        inverse = add_prop(child, plural(join_name),
+                        inverse = add_prop(child, inverse_collection_base(position, role),
                                            explicit_relationship_comment(position) + "\n"
                                            f"    public ICollection<{join_name}> $ {{ get; }} = [];")
                         join["fks"].append((target_type, prop_name, (prop_name + "Id",), inverse, False, None, set()))
                         condition = f"{sql_identifier(prop_name + 'Id')} IS NOT NULL"
                         alternatives.append(((prop_name + "Id",), condition))
                         present.append(f"CASE WHEN {sql_identifier(prop_name + 'Id')} IS NULL THEN 0 ELSE 1 END")
+                        matching.append(
+                            f"({condition} AND {sql_identifier(base_id)} = {sql_identifier(prop_name + 'Id')})")
                     identities.append(alternatives)
                     join["checks"].append((f"CK_{join_name}_{pascal(ep.entity)}_ExactlyOne",
-                                           " + ".join(present) + " = 1"))
+                                           f"({' + '.join(present)} = 1) AND ({' OR '.join(matching)})"))
                 elif strategy == "id-and-kind":
                     prop_name = role + pascal(ep.entity) + "Target"
                     enum_name = pascal(ep.entity) + "Kind"
-                    join["fields"] += [explicit_relationship_comment(position),
+                    join["fields"] += [join_reference_comment(ep.entity, ep.card),
                                        f"    public Guid {prop_name}Id {{ get; set; }}",
                                        f"    public {enum_name} {prop_name}Kind {{ get; set; }}",
                                        f"    // TODO: Validate that {prop_name}Id identifies an entity of {prop_name}Kind."]
                     identities.append([((prop_name + "Kind", prop_name + "Id"), None)])
+                    join["key"].extend((prop_name + "Kind", prop_name + "Id"))
                     allowed = ", ".join(str(i) for i in range(1, len(retained_targets(ep.entity)) + 1))
                     join["checks"].append((f"CK_{join_name}_{prop_name}Kind",
                                            f"{sql_identifier(prop_name + 'Kind')} IN ({allowed})"))
@@ -419,7 +470,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                     prop_name = role + pascal(ep.entity)
                     target_type = type_name(ep.entity)
                     kind = child_kind(ep.entity)
-                    join["fields"].append(explicit_relationship_comment(position))
+                    join["fields"].append(join_reference_comment(ep.entity, ep.card))
                     join["fields"].append(f"    public Guid {prop_name}Id {{ get; set; }}")
                     fk_fields = (prop_name + "Id",)
                     principal = None
@@ -432,12 +483,13 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                         join["checks"].append((f"CK_{join_name}_{kind_prop}",
                                                f"{sql_identifier(kind_prop)} = {sorted(derivations[base]).index(ep.entity) + 1}"))
                     join["fields"].append(f"    public {target_type} {prop_name} {{ get; set; }} = null!;")
-                    inverse = add_prop(ep.entity, plural(join_name),
+                    inverse = add_prop(ep.entity, inverse_collection_base(position, role),
                                        explicit_relationship_comment(position) + "\n"
                                        f"    public ICollection<{join_name}> $ {{ get; }} = [];")
                     join["fks"].append((target_type, prop_name, fk_fields, inverse, True, principal,
                                         {field for field, _, _ in join["shadows"] if field in fk_fields}))
                     identities.append([(fk_fields, None)])
+                    join["key"].extend(fk_fields)
             for attr in rel.attributes:
                 join["fields"].append(f"    // Attribute: {attr}")
 
@@ -467,6 +519,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                 for fields, filters in combinations:
                     if fields:
                         join["indexes"].add(index_key(fields, " AND ".join(filters) or None))
+            join["indexes"].discard(index_key(join["key"]))
             joins.append(join)
             for ep in eps:
                 if ep.card == "1..*":
@@ -474,28 +527,11 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
             continue
 
         a, b = eps
-        an, bn = mapped(a.entity), mapped(b.entity)
         ac, bc = type_name(a.entity), type_name(b.entity)
         a_many = CARD.get(a.card, (0, None))[1] is None
         b_many = CARD.get(b.card, (0, None))[1] is None
         prefix = pascal(rel.name) if rel.name else ""
-        if a_many and b_many:
-            join_name = pascal(rel.name or "".join(sorted((pascal(a.entity), pascal(b.entity)))))
-            if a.entity == b.entity:
-                ap = add_prop(an, prefix + "Targets",
-                              f"    // relationship {a.card}:{b.card}\n    public ICollection<{bc}> $ {{ get; }} = [];")
-                bp = add_prop(bn, prefix + "Sources",
-                              f"    // relationship {b.card}:{a.card}\n    public ICollection<{ac}> $ {{ get; }} = [];")
-                fk_a, fk_b = "Source" + ac + "Id", "Target" + bc + "Id"
-            else:
-                ap = add_prop(an, prefix + plural(pascal(b.entity)),
-                              f"    // relationship {a.card}:{b.card}\n    public ICollection<{bc}> $ {{ get; }} = [];")
-                bp = add_prop(bn, prefix + plural(pascal(a.entity)),
-                              f"    // relationship {b.card}:{a.card}\n    public ICollection<{ac}> $ {{ get; }} = [];")
-                fk_a, fk_b = pascal(a.entity) + "Id", pascal(b.entity) + "Id"
-            if ap and bp:
-                configs.append(("mm", ac, ap, bc, bp, join_name, fk_a, fk_b))
-        else:
+        if not (a_many and b_many):
             many, one = (a, b) if a_many else ((b, a) if b_many else (None, None))
             if many:
                 mn, on = mapped(many.entity), mapped(one.entity)
@@ -542,15 +578,17 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                 if ref and inv:
                     configs.append(("oo", dc, ref, pc, inv, not optional))
 
+    lines += ["// Explicit entities", ""]
     for name in classes:
         class_name = pascal(name)
-        lines += [f"public partial class {class_name} : {entity_base}", "{"]
+        lines += [f"public partial class {class_name} : {entity_base}WithId", "{"]
         if name in derivations and strategies[name] == "base-and-kind":
             lines.append(f"    public {class_name}Kind Kind {{ get; set; }}")
         lines += props[name] or ["    // No modeled members beyond Id."]
         for attr in entities[name].attributes:
             lines.append(f"    // Attribute: {attr}")
         lines += ["}", ""]
+    lines += ["// Join entities", ""]
     for join in joins:
         lines += [f"public partial class {join['name']} : {entity_base}", "{"] + join["fields"] + ["}", ""]
 
@@ -564,17 +602,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
             sql = f"{sql_identifier('Kind')} IN ({allowed})"
             lines.append(f"        modelBuilder.Entity<{class_name}>().ToTable(t => t.HasCheckConstraint(\"CK_{class_name}_Kind\", {csharp_string(sql)}));")
     for config in configs:
-        if config[0] == "mm":
-            _, left, left_nav, right, right_nav, table, left_fk, right_fk = config
-            lines += [f"        modelBuilder.Entity<{left}>()",
-                      f"            .HasMany(e => e.{left_nav})",
-                      f"            .WithMany(e => e.{right_nav})",
-                      "            .UsingEntity<Dictionary<string, object>>(",
-                      f"                \"{table}\",",
-                      f"                right => right.HasOne<{right}>().WithMany().HasForeignKey(\"{right_fk}\").OnDelete(DeleteBehavior.Restrict),",
-                      f"                left => left.HasOne<{left}>().WithMany().HasForeignKey(\"{left_fk}\").OnDelete(DeleteBehavior.Restrict),",
-                      f"                join => join.HasKey(\"{left_fk}\", \"{right_fk}\"));"]
-        elif config[0] == "om":
+        if config[0] == "om":
             _, dependent, nav, principal_type, inverse, required, fk_fields, principal_fields, shadow_fields = config
             fk = (", ".join(csharp_string(field) for field in fk_fields) if shadow_fields else
                   (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1
@@ -598,6 +626,12 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
         name = join["name"]
         for property_name, enum_name, enum_value in join["shadows"]:
             lines.append(f"        modelBuilder.Entity<{name}>().Property<{enum_name}>({csharp_string(property_name)}).HasDefaultValue({enum_name}.{enum_value});")
+        key_shadow_fields = {field for field, _, _ in join["shadows"]}
+        key = (", ".join(csharp_string(field) for field in join["key"])
+               if any(field in key_shadow_fields for field in join["key"]) else
+               (f"e => e.{join['key'][0]}" if len(join["key"]) == 1
+                else "e => new { " + ", ".join("e." + field for field in join["key"]) + " }"))
+        lines.append(f"        modelBuilder.Entity<{name}>().HasKey({key});")
         for target, nav, fk_fields, inverse, required, principal_fields, shadow_fields in join["fks"]:
             fk = (", ".join(csharp_string(field) for field in fk_fields) if shadow_fields else
                   (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1

@@ -17,26 +17,15 @@
 ### Input conventions and identity
 
 - Inputs are Excalidraw exports. By default the converter selects
-  `model/*.excalidraw`; explicit paths replace that selection. Each selected
-  export is identified by the semantic color name at the start of its filename.
+  `model/*.excalidraw`; explicit paths replace that selection. Export filenames
+  have no semantic meaning.
 - Solid rectangles are local entity definitions and dashed rectangles are
-  external occurrences. An external occurrence must resolve to exactly one
-  local definition with the same logical name and owner color. Repeated external
-  occurrences do not create entities.
-- The current exports use the following source-color aliases:
-
-  | Color name | Excalidraw stroke color |
-  | --- | --- |
-  | black | `#1e1e1e` |
-  | blue | `#1971c2` |
-  | gray | `#868e96` |
-  | green | `#2f9e44` |
-  | orange | `#f08c00` |
-  | purple | `#be4bdb`, `#9c36b5` |
-  | red | `#e03131` |
-
-  The `purple-alt` alias is an external-occurrence color for the purple
-  submodel. Unknown colors and owner-color mismatches are errors.
+  external occurrences. Every selected export must have exactly one solid
+  rectangle-border color, and no two exports may use the same such color. The
+  converter derives ownership from this color. An external occurrence must
+  resolve to a local definition with the same logical name and solid owner
+  color. A dashed border color without such an owner, or an owner-color
+  mismatch, is an error. Repeated external occurrences do not create entities.
 - Logical entity and relationship names remove whitespace and source line
   breaks. Thus `competitor_status` followed by `_event` in an entity label is
   `competitor_status_event`. Attribute labels use a different rule below.
@@ -89,20 +78,24 @@
   Use deterministic plural collections, including `Person` / `People` and
   `Country` / `Countries`; resolve C# member collisions deterministically.
 - Generate nullable-enabled, public partial classes independent of host implicit
-  usings. Every explicitly generated class inherits `Guid Id` from the common
-  base named by `-e/--entity_base` (default `EntityBase`). This base is reserved
-  for future common behavior such as soft deletion.
+  usings. The empty base named by `-e/--entity_base` (default `EntityBase`) is
+  reserved for common behavior such as soft deletion. Its generated
+  `<Name>WithId` subclass supplies `Guid Id`; each entity drawn as a rectangle
+  inherits that subclass. Each generated join entity inherits the empty base
+  and has a participant-FK tuple primary key, never an `Id`.
 - Initialize collection navigations as `ICollection<T> ... { get; } = [];`.
   Required references use `T` and `= null!;`; optional references use `T?` and
   nullable `Guid?` foreign keys.
 - Prefix each direct reference/FK pair with `// relationship L:R`, where `L` is
   the current entity endpoint cardinality and `R` is the remote endpoint
   cardinality. Apply the same reversed notation to direct collection-only
-  navigations. For explicit association collections and their participant FK
-  groups, use the actual endpoint sequence in
-  `// relationship L:R[:R...] to <Target>[, <Target>...]`; the first cardinality
-  belongs to the current source entity and the remaining cardinalities and names
-  belong to the other source entities, never the generated association class.
+  navigations. Explicit association collections use the actual endpoint sequence
+  in `// relationship L:R[:R...] to <Target>[, <Target>...]`; the first
+  cardinality belongs to the current source entity and the remaining
+  cardinalities and names belong to the other source entities, never the
+  generated association class. Each FK/navigation group inside a join class
+  instead starts with `// <EntityName> at cardinality <Cardinality>`, naming its
+  referenced ER entity and that entity's endpoint cardinality.
 - Generate a `ModelConfiguration.Configure(ModelBuilder)` helper. The host calls
   it from `OnModelCreating`. The generated Fluent API uses `DeleteBehavior.Restrict`
   until lifecycle rules are modeled.
@@ -113,19 +106,21 @@
 | --- | --- |
 | One-to-many | Reference/FK on the many side, inverse collection, `HasOne` / `WithMany`, requiredness from cardinality |
 | One-to-one | Two references, selected dependent FK, `HasOne` / `WithOne`, unique FK index |
-| Binary many-to-many without payload | Two skip collections and an EF-managed named join with explicit FK names and composite key |
-| Binary relationship with attributes | Explicit association entity with references/FKs, payload comments, and participant uniqueness |
-| Ternary or higher relationship | Explicit association entity with each participant reference/FK and cardinality-derived uniqueness |
+| Binary relationship with unbounded upper multiplicity at both ends | Typed join entity with references/FKs and a participant-FK tuple primary key |
+| Binary relationship with attributes | Typed join entity with references/FKs, payload comments, and a participant-FK tuple primary key |
+| Ternary or higher relationship | Typed join entity with each participant reference/FK and a participant-FK tuple primary key |
 
-- Explicit association entities have their own `Id`; EF-managed skip-navigation
-  joins use their participant FK composite key. Explicit association rows are
-  unique by their full participant tuple. If an endpoint has upper bound one,
-  the other participant identities are also unique.
+- Every join entity uses its participant FK tuple as its primary key. For a
+  nullable-FK virtual target, a required `<Base>Id` mirrors the selected
+  concrete target FK and replaces the nullable alternatives in that key. A
+  check constraint enforces both exactly one selected target and the equality.
+  Join rows are unique by their full participant tuple. If an endpoint has upper
+  bound one, the other participant identities are also unique.
 - Generate individual FK indexes and explicit unique indexes. For a nullable
   polymorphic target group, generate one filtered unique index per target branch
   instead of a naive nullable composite unique index.
 - Generate Fluent configuration for navigations, foreign keys, alternate keys,
-  many-to-many joins, indexes, and checks. PostgreSQL-oriented check constraints
+  join entities, indexes, and checks. PostgreSQL-oriented check constraints
   enforce enum ranges, fixed derived kinds, and exactly-one nullable target
   choices.
 - `1..*` collection minima and principal-side existence requirements cannot be
@@ -154,35 +149,11 @@ The default is `nullable-fks`. Reject unknown bases, invalid strategies, and any
 `base-and-kind` combination that would collapse one concrete entity into more
 than one base.
 
-The current mapping is:
-
-| Base | Strategy | Retained representation |
-| --- | --- | --- |
-| organization | base-and-kind | `Organization` plus `OrganizationKind.Club` / `.Federation` |
-| result_phase | nullable-fks | Round / RoundDance target FKs |
-| result_context | nullable-fks | Competition / CompetitionCall target FKs |
-| result_owner | nullable-fks | Competitor / Participant target FKs |
-| with_external | nullable-fks | Concrete external-target FKs |
-| scope | nullable-fks | Competition / Event / Floor / Organization target FKs |
-
 Nested virtual targets expand to their retained concrete representation. For
-`nullable-fks`, an association row has exactly one target FK in its group; for
-`id-and-kind`, validation remains a documented TODO because one ID cannot be a
-normal FK to several tables.
-
-### Current explicit associations
-
-The current mapping generates explicit association classes for payload,
-ternary, and polymorphic relationships:
-
-`ContributesEv`, `MarkingEligible`, `ParticipantDefinition`,
-`ParticipantMember`, `CompetitorMember`, `CompStartnoStack`,
-`CompetitionDance`, `ContributesCo`, `MapsTo`, `AccountRoleScope`,
-`ResultResultOwner`, `ResultResultContext`, `ResultResultPhase`, and
-`EvaluationResultOwner`.
-
-With the selected mapping, this produces 55 explicit CLR entity classes. Pure
-binary many-to-many relationships are additional EF-managed shared join types.
+`nullable-fks`, an association row has exactly one target FK in its group. Its
+required `<Base>Id` equals that selected FK and provides a non-null identity for
+the join primary key. For `id-and-kind`, validation remains a documented TODO
+because one ID cannot be a normal FK to several tables.
 
 ### Validation and maintenance
 
