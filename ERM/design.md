@@ -1,7 +1,6 @@
 # ERM to EF Core Skeleton Converter
 
-* Our web application TAS is a management SW for performaning dancing competitions.
-* TAS' backend shall use EF Core 10 in C#, npgsql, and PostgreSQL for data storage.
+* The source application is a management system whose backend shall use EF Core 10 in C#, Npgsql, and PostgreSQL for data storage.
 * For the database, an initial ER model has been drawn in Excalidraw.
 * This model consists of several submodels, each of which addresses a logical subdomain.
 * In this project, a Python script shall be developed by Codex that converts the set of all submodels
@@ -14,8 +13,13 @@
 - Deliver a standalone Python converter usable by other developers without AI
   agents. Parsing, reconciliation, geometric assignment, error checking, and C#
   generation must be executable script capabilities, not manual session steps.
-- Generate class skeletons in `Implementation/model.cs`; most attributes have
-  not yet been modeled. Use PascalCase for classes and members.
+- Generate class skeletons in `Implementation/model.cs` when an output path is
+  explicitly supplied; omitting `--output` performs validation and diagnostics
+  only. Most attributes have not yet been modeled. Use PascalCase for classes
+  and members.
+- Diagnostics are always printed to standard output. The CLI intentionally has
+  no separate verbosity flag: normal output is limited to actionable diagnostics
+  and one generation/status line, while `-h` documents all options.
 - Each explicitly modeled entity implemented as an actual entity shall have a
   `Guid Id` primary key.
 - Collection navigations shall use `ICollection<T>`; single-valued navigations
@@ -73,13 +77,15 @@ Support three representations:
    distinguished by a type enum; no separate derived entities. This supports
    `organization` as one actual entity with its derived kinds as enum values.
 
-Expose `--virtual-base-strategy` as a global fallback and repeatable
-`--virtual-base <logical-name>=<strategy>` overrides. Supported strategy values
+Expose one repeatable `-b/--virtual-base` option. One bare strategy sets the
+global default; any number of `<logical-name>=<strategy>` values override named
+bases. If no bare strategy is supplied, the global default is `nullable-fks`.
+Supported strategy values
 are `id-and-kind`, `nullable-fks`, and `base-and-kind`. Reject unknown base names,
-unknown strategies, and duplicate/conflicting overrides. The current model uses
+unknown strategies, and malformed settings. The current model uses
 `nullable-fks` as its default, with `organization=base-and-kind`:
 
-`--virtual-base-strategy nullable-fks --virtual-base organization=base-and-kind`
+`-b nullable-fks -b organization=base-and-kind`
 
 Define integrity constraints and mappings of relationships to derived types
 for each representation before generating it.
@@ -387,13 +393,12 @@ EF representation in this model. This preserves all three required strategies.
 # References
 * `00-legend-2026-09-08-1616.excalidraw` contains the drawings' legend.
 * `00-legend-2026-09-08-1616.png` contains both the submodel table with its background colors and the drawings' legend.
-* `ER-Modellierung.md` contains the list of submodels with a color map
 
 ## Development Plan
 
-Steps 1–4 are complete. The mapping policy is under Requirements.
-Steps 5–7 have not started. The executable converter
-remains the step 5 deliverable; audit calculations do not replace it.
+Steps 1–4 are complete. Step 5 is complete as the initial standalone converter
+implementation. Steps 6–7 have not started; generated C# mapping and full EF
+validation remain subject to the verification work in those steps.
 
 ### 1. Establish the input inventory and drawing conventions
 
@@ -497,6 +502,28 @@ Requirements. Implementation and executable validation remain in steps 5–6.
   `1..*` minimum, rather than treating them as fully implemented constraints.
 
 ### 5. Implement the converter and diagnostics
+
+Status: complete as an initial executable implementation in `erm_converter.py`.
+It accepts explicit export paths, optional `--output`, `--namespace`, and the
+repeatable `-b/--virtual-base` configuration option. It parses all seven current exports,
+validates global entity ownership and duplicate definitions, resolves live arrow
+bindings, performs one-to-one cardinality matching with explicit unmatched slots,
+and writes output atomically only when no error diagnostics exist. Warnings are
+reported and do not prevent output. The generated file is `Implementation/model.cs`.
+
+Diagnostics-only invocation from `ERM`:
+
+```text
+python3 erm_converter.py
+```
+
+The implementation always prints diagnostics to standard output and preserves
+source file/element IDs in them. It treats
+stale `boundElements` back-references as metadata, never arrow direction, and
+rejects unknown external colors, missing entity definitions, duplicate local
+definitions, malformed input, and unresolved required input selection. It is a
+usable CLI baseline; step 6 must expand its relationship classification,
+virtual-base lowering, and EF configuration verification against fixtures.
 
 - Implement a Python command-line entry point with explicit input, output, and
   override/configuration paths; document invocation and dependencies.
