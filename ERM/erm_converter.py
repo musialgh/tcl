@@ -365,7 +365,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
             while join_name in {join["name"] for join in joins}:
                 join_name = f"{base_name}{suffix}"
                 suffix += 1
-            join = {"name": join_name, "fields": [], "fks": [], "checks": [], "indexes": set()}
+            join = {"name": join_name, "fields": [], "fks": [], "shadows": [], "checks": [], "indexes": set()}
             counts, seen, identities = {}, {}, []
             for ep in eps:
                 counts[ep.entity] = counts.get(ep.entity, 0) + 1
@@ -383,7 +383,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                                            f"    public {target_type}? {prop_name} {{ get; set; }}"]
                         inverse = add_prop(child, plural(join_name),
                                            f"    public ICollection<{join_name}> $ {{ get; }} = [];")
-                        join["fks"].append((target_type, prop_name, (prop_name + "Id",), inverse, False, None))
+                        join["fks"].append((target_type, prop_name, (prop_name + "Id",), inverse, False, None, set()))
                         condition = f"{sql_identifier(prop_name + 'Id')} IS NOT NULL"
                         alternatives.append(((prop_name + "Id",), condition))
                         present.append(f"CASE WHEN {sql_identifier(prop_name + 'Id')} IS NULL THEN 0 ELSE 1 END")
@@ -410,8 +410,7 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                     if kind:
                         base, enum_name, enum_value = kind
                         kind_prop = prop_name + "Kind"
-                        join["fields"].append(
-                            f"    public {enum_name} {kind_prop} {{ get; set; }} = {enum_name}.{enum_value};")
+                        join["shadows"].append((kind_prop, enum_name, enum_value))
                         fk_fields = (prop_name + "Id", kind_prop)
                         principal = ("Id", "Kind")
                         join["checks"].append((f"CK_{join_name}_{kind_prop}",
@@ -419,7 +418,8 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                     join["fields"].append(f"    public {target_type} {prop_name} {{ get; set; }} = null!;")
                     inverse = add_prop(ep.entity, plural(join_name),
                                        f"    public ICollection<{join_name}> $ {{ get; }} = [];")
-                    join["fks"].append((target_type, prop_name, fk_fields, inverse, True, principal))
+                    join["fks"].append((target_type, prop_name, fk_fields, inverse, True, principal,
+                                        {field for field, _, _ in join["shadows"] if field in fk_fields}))
                     identities.append([(fk_fields, None)])
             for attr in rel.attributes:
                 join["fields"].append(f"    // Attribute: {attr}")
@@ -492,14 +492,15 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                 if ref and kind:
                     base, enum_name, enum_value = kind
                     kind_prop = ref + "Kind"
-                    props[mn].insert(-1, f"    public {enum_name} {kind_prop} {{ get; set; }} = {enum_name}.{enum_value};")
                     fk_fields, principal = (ref + "Id", kind_prop), ("Id", "Kind")
+                    configs.append(("shadow", mc, kind_prop, enum_name, enum_value))
                     configs.append(("check", mc, f"CK_{mc}_{kind_prop}",
                                     f"{sql_identifier(kind_prop)} = {sorted(derivations[base]).index(one.entity) + 1}"))
                 col = add_prop(on, prefix + plural(pascal(many.entity)),
                                f"    public ICollection<{mc}> $ {{ get; }} = [];")
                 if ref and col:
-                    configs.append(("om", mc, ref, oc, col, not optional, fk_fields, principal))
+                    shadow_fields = {kind_prop} if ref and kind else set()
+                    configs.append(("om", mc, ref, oc, col, not optional, fk_fields, principal, shadow_fields))
                 if many.card == "1..*":
                     todos.append(f"Cardinality 1..* for {oc}.{col} requires existence validation.")
             else:
@@ -522,9 +523,9 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
         lines += [f"public partial class {class_name} : {entity_base}", "{"]
         if name in derivations and strategies[name] == "base-and-kind":
             lines.append(f"    public {class_name}Kind Kind {{ get; set; }}")
+        lines += props[name] or ["    // No modeled members beyond Id."]
         for attr in entities[name].attributes:
             lines.append(f"    // Attribute: {attr}")
-        lines += props[name] or ["    // No modeled members beyond Id."]
         lines += ["}", ""]
     for join in joins:
         lines += [f"public partial class {join['name']} : {entity_base}", "{"] + join["fields"] + ["}", ""]
@@ -550,13 +551,17 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
                       f"                left => left.HasOne<{left}>().WithMany().HasForeignKey(\"{left_fk}\").OnDelete(DeleteBehavior.Restrict),",
                       f"                join => join.HasKey(\"{left_fk}\", \"{right_fk}\"));"]
         elif config[0] == "om":
-            _, dependent, nav, principal_type, inverse, required, fk_fields, principal_fields = config
-            fk = (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1
-                  else "e => new { " + ", ".join("e." + field for field in fk_fields) + " }")
+            _, dependent, nav, principal_type, inverse, required, fk_fields, principal_fields, shadow_fields = config
+            fk = (", ".join(csharp_string(field) for field in fk_fields) if shadow_fields else
+                  (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1
+                   else "e => new { " + ", ".join("e." + field for field in fk_fields) + " }"))
             principal = ("" if not principal_fields else
                          ".HasPrincipalKey(e => new { " + ", ".join("e." + field for field in principal_fields) + " })")
             lines.append(f"        modelBuilder.Entity<{dependent}>().HasOne(e => e.{nav}).WithMany(e => e.{inverse}).HasForeignKey({fk}){principal}.IsRequired({str(required).lower()}).OnDelete(DeleteBehavior.Restrict);")
             lines.append(f"        modelBuilder.Entity<{dependent}>().HasIndex({fk});")
+        elif config[0] == "shadow":
+            _, entity, property_name, enum_name, enum_value = config
+            lines.append(f"        modelBuilder.Entity<{entity}>().Property<{enum_name}>({csharp_string(property_name)}).HasDefaultValue({enum_name}.{enum_value});")
         elif config[0] == "oo":
             _, dependent, nav, principal_type, inverse, required = config
             lines.append(f"        modelBuilder.Entity<{dependent}>().HasOne(e => e.{nav}).WithOne(e => e.{inverse}).HasForeignKey<{dependent}>(e => e.{nav}Id).IsRequired({str(required).lower()}).OnDelete(DeleteBehavior.Restrict);")
@@ -567,9 +572,12 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
 
     for join in joins:
         name = join["name"]
-        for target, nav, fk_fields, inverse, required, principal_fields in join["fks"]:
-            fk = (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1
-                  else "e => new { " + ", ".join("e." + field for field in fk_fields) + " }")
+        for property_name, enum_name, enum_value in join["shadows"]:
+            lines.append(f"        modelBuilder.Entity<{name}>().Property<{enum_name}>({csharp_string(property_name)}).HasDefaultValue({enum_name}.{enum_value});")
+        for target, nav, fk_fields, inverse, required, principal_fields, shadow_fields in join["fks"]:
+            fk = (", ".join(csharp_string(field) for field in fk_fields) if shadow_fields else
+                  (f"e => e.{fk_fields[0]}" if len(fk_fields) == 1
+                   else "e => new { " + ", ".join("e." + field for field in fk_fields) + " }"))
             principal = ("" if not principal_fields else
                          ".HasPrincipalKey(e => new { " + ", ".join("e." + field for field in principal_fields) + " })")
             inverse_call = f"e => e.{inverse}" if inverse else ""
@@ -578,8 +586,11 @@ def generate(entities, relationships, derivations, namespace, entity_base, virtu
         for check_name, sql in join["checks"]:
             lines.append(f"        modelBuilder.Entity<{name}>().ToTable(t => t.HasCheckConstraint(\"{check_name}\", {csharp_string(sql)}));")
         for fields, filter_sql in sorted(join["indexes"], key=lambda item: (item[0], item[1] or "")):
-            expression = (f"e => e.{fields[0]}" if len(fields) == 1
-                          else "e => new { " + ", ".join("e." + field for field in fields) + " }")
+            shadow_fields = {field for field, _, _ in join["shadows"]}
+            expression = (", ".join(csharp_string(field) for field in fields)
+                          if any(field in shadow_fields for field in fields) else
+                          (f"e => e.{fields[0]}" if len(fields) == 1
+                           else "e => new { " + ", ".join("e." + field for field in fields) + " }"))
             suffix = ".IsUnique()"
             if filter_sql:
                 suffix += f".HasFilter({csharp_string(filter_sql)})"

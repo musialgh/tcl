@@ -69,6 +69,7 @@
 - Preserve each untyped source attribute as one `// Attribute: <name>` comment
   on the owning entity or explicit association class, and emit a non-blocking
   `ATTRIBUTE_TYPE_PENDING` diagnostic. Do not guess typed properties.
+- Place attribute comments after all generated properties in their owning class.
 - Each nonempty attribute-label line starts an attribute unless it starts with
   `_`. An underscore-prefixed line is appended to the preceding attribute name;
   for example, `contribution` followed by `_type` becomes `contribution_type`.
@@ -136,6 +137,9 @@ Each derivation base supports these strategies through repeatable
    target, with an exactly-one check for each required polymorphic reference.
 3. `base-and-kind`: retain only the base entity with a kind enum. References to
    a derived type use the base ID/kind alternate key and a fixed-kind check.
+   The referencing CLR class exposes only the meaningful ID and navigation; the
+   fixed kind is an EF Core shadow property with a default, check, and composite
+   foreign key.
 
 One bare strategy sets the default; `NAME=STRATEGY` overrides individual bases.
 The default is `nullable-fks`. Reject unknown bases, invalid strategies, and any

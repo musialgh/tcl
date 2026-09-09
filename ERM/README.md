@@ -78,6 +78,11 @@ base class with `Guid Id`, navigation and foreign-key properties, explicit
 association classes where EF cannot represent the relationship as a simple skip
 navigation, and `ModelConfiguration.Configure(ModelBuilder)` for Fluent mapping.
 
+For a fixed derived-type reference represented through `base-and-kind`, the
+generated CLR entity exposes only the meaningful ID and navigation. EF retains
+the fixed discriminator as a hidden shadow property so the database can enforce
+the derived kind through a check constraint and composite foreign key.
+
 The configuration includes relationship cardinality where EF can represent it,
 foreign keys, indexes, unique constraints, relational checks, and filtered
 indexes for nullable polymorphic targets. It deliberately leaves these items as
@@ -96,4 +101,5 @@ relationships, ellipses attributes, and triangular line shapes derivation.
 Entity and relationship labels ignore source line breaks. Attribute labels differ:
 each nonempty line begins a new attribute, except a line beginning with `_`,
 which continues the preceding attribute. Thus `contribution` followed by `_type`
-is emitted as one `contribution_type` attribute comment.
+is emitted as one `contribution_type` attribute comment. Attribute comments are
+placed after generated members in their class.
