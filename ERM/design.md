@@ -81,9 +81,9 @@
 
 - Generate only when `--output FILE` is supplied. Write atomically after all
   error diagnostics pass, so a failed conversion cannot replace a valid output.
-- Begin generated files with an auto-generated notice, local timestamp including
-  UTC offset, and the shell-quoted command line. The timestamp intentionally
-  changes output bytes; the model body must otherwise be semantically stable.
+- Begin generated files with a local timestamp including UTC offset and the
+  shell-quoted command line. The timestamp intentionally changes output bytes;
+  the model body must otherwise be semantically stable.
 - The generated namespace defaults to `GeneratedModel`. Classes and members use
   PascalCase after normalizing logical underscore/whitespace-separated names.
   Use deterministic plural collections, including `Person` / `People` and
@@ -95,6 +95,14 @@
 - Initialize collection navigations as `ICollection<T> ... { get; } = [];`.
   Required references use `T` and `= null!;`; optional references use `T?` and
   nullable `Guid?` foreign keys.
+- Prefix each direct reference/FK pair with `// relationship L:R`, where `L` is
+  the current entity endpoint cardinality and `R` is the remote endpoint
+  cardinality. Apply the same reversed notation to direct collection-only
+  navigations. For explicit association collections and their participant FK
+  groups, use the actual endpoint sequence in
+  `// relationship L:R[:R...] to <Target>[, <Target>...]`; the first cardinality
+  belongs to the current source entity and the remaining cardinalities and names
+  belong to the other source entities, never the generated association class.
 - Generate a `ModelConfiguration.Configure(ModelBuilder)` helper. The host calls
   it from `OnModelCreating`. The generated Fluent API uses `DeleteBehavior.Restrict`
   until lifecycle rules are modeled.
