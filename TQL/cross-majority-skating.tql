@@ -178,7 +178,7 @@ FUNCTION apply_r10(marks,       # table (start, dance, adjudicator, value) with 
                             "R10c,d: single remaining place {for_place} from previous tie");
 
     # report r10 application
-    LET apply_r10 = SELECT start, round AS round, "R10-applied" AS group, for_place AS subgroup, "X" AS value,
+    LET apply_r10 = SELECT start, round AS round, "R10-applied" AS group, for_place AS subgroup, 1 AS value,
                            "R9b: places sum {tie_sum} tie for place {for_place}" AS reason FROM tie;
     INSERT INTO report VALUES apply_r10;
     # fetch counts and sums better or equal target place, while keeping num=0 entries in subset
@@ -224,7 +224,7 @@ FUNCTION apply_r11(marks,       # table (start, dance, adjudicator, value) with 
     GLOBAL round, report, starts, unplaced;
 
     # report r11 application
-    LET apply_r11 = SELECT start, round AS round, "R11-applied" AS group, for_place AS subgroup, "X" AS value, 
+    LET apply_r11 = SELECT start, round AS round, "R11-applied" AS group, for_place AS subgroup, 1 AS value,
                            "R10e: sum {tie[1].sum} tie on all places {for_place} or better" AS reason FROM tie;
     INSERT INTO report VALUES apply_r11;
     # invoke rules 5 to 8, taking TSO Appendix 2 sort of literally
