@@ -12,6 +12,7 @@ No .NET SDK and no `node_modules` are required on the recipient's machine.
 | `server/tql-lsp.exe` | Self-contained win-x64 LSP server binary |
 | `syntaxes/tql.tmLanguage.json` | TextMate grammar for syntax highlighting |
 | `language-configuration.json` | Bracket/indent/comment rules |
+| `README.md` | Extension overview, installation, and usage notes |
 | `package.json` | Extension manifest |
 
 Each VSIX contains only the binary for its target platform.

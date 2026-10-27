@@ -106,6 +106,7 @@ def build_vsix(pkg, binary, suffix):
 
     static = [
         "package.json",
+        "README.md",
         "extension.bundle.js",
         "language-configuration.json",
         "syntaxes/tql.tmLanguage.json",
