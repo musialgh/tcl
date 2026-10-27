@@ -9,6 +9,10 @@ ballroom dance competition adjudication algorithms.  The binary is `tql`.
 tql <script.tql> {[-r <file>] -i <table>} {[-w <file>] -o <table>}
 ```
 
+Relative paths supplied as command-line arguments (`script`, `-r`, `-w`) are
+resolved against the caller's current working directory. Relative paths inside
+a TQL script (`IMPORT`, `LOAD`, `SAVE`) are resolved against the script directory.
+
 Multiple tables can be read from one file (blank-line separated).  `-` as a
 file name resets to stdin / stdout.
 
@@ -191,6 +195,7 @@ Run with:
 ```bash
 python3 run-tests.py            # auto-builds if dll missing
 python3 run-tests.py --build    # force rebuild first
+python3 run-tests.py --html     # retain HTML reports beside test input files
 python3 run-tests.py finale     # filter by name
 ```
 

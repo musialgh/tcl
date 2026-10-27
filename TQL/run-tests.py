@@ -8,19 +8,23 @@ the data columns from each expected CSV and ignores row order and reason text.
 Usage:
     python3 run-tests.py          # run all tests
     python3 run-tests.py --build  # force rebuild before running
+    python3 run-tests.py --html   # retain HTML reports beside test inputs
     python3 run-tests.py <name>   # run only tests whose name contains <name>
 """
 
 import csv
 import io
+import os
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 PROJ = ROOT / "interpreter" / "TqlInterpreter.csproj"
 TQL  = ["dotnet", "run", "--project", str(PROJ), "--no-build", "--"]
+CSV_TO_HTML = ROOT / "csv-to-html.py"
 
 TESTS = [
     {
@@ -81,7 +85,27 @@ def build():
         sys.exit(f"Build failed (exit {r.returncode})")
     print("Build OK\n")
 
-def run_test(t: dict):
+def html_report_path(t: dict) -> Path:
+    input_path = ROOT / t["input"]
+    stem = input_path.stem
+    report_stem = f"{stem[:-len('-marks')]}-report" if stem.endswith("-marks") else f"{stem}-report"
+    return input_path.with_name(f"{report_stem}.html")
+
+
+def retain_html_report(t: dict, csv_output: str):
+    output_path = html_report_path(t)
+    result = subprocess.run(
+        [sys.executable, str(CSV_TO_HTML), "-", "-o", str(output_path), "-t", t["name"]],
+        input=csv_output, capture_output=True, text=True, cwd=ROOT
+    )
+    ok = result.returncode == 0 and output_path.is_file() and output_path.stat().st_size > 0
+    check(f"{t['name']}: HTML report written", ok,
+          result.stderr.strip() or f"expected non-empty output file: {output_path}")
+    if ok:
+        print(f"        {output_path}")
+
+
+def run_test(t: dict, keep_html: bool = False):
     cmd = TQL + [
         t["script"],
         "-r", t["input"], "-i", t["table"],
@@ -94,6 +118,9 @@ def run_test(t: dict):
           f"stderr: {result.stderr.strip()}")
     if result.returncode != 0:
         return
+
+    if keep_html:
+        retain_html_report(t, result.stdout)
 
     actual_reader = csv.DictReader(io.StringIO(result.stdout), delimiter=";")
     expected_path = ROOT / t["expected"]
@@ -133,10 +160,32 @@ def run_test(t: dict):
     check(f"{name}: placement rows match expected data",
           not missing and not extra, detail)
 
+
+def run_cli_path_test():
+    """CLI paths must be relative to the caller's working directory."""
+    with tempfile.TemporaryDirectory(prefix="tql-cli-paths-") as directory:
+        cwd = Path(directory)
+        script = os.path.relpath(ROOT / "run-cms-finale.tql", cwd)
+        input_file = os.path.relpath(ROOT / "test-data/cms-finale-example-m-marks.csv", cwd)
+        output_file = cwd / "report.csv"
+        cmd = TQL + [
+            script,
+            "-r", input_file, "-i", "marks",
+            "-w", output_file.name, "-o", "report",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+
+        check("cli-relative-paths: exit code 0", result.returncode == 0,
+              f"stderr: {result.stderr.strip()}")
+        check("cli-relative-paths: output below caller cwd",
+              output_file.is_file() and output_file.stat().st_size > 0,
+              f"expected non-empty output file: {output_file}")
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
     force_build = "--build" in sys.argv
+    keep_html = "--html" in sys.argv
     filter_args = [a for a in sys.argv[1:] if not a.startswith("--")]
 
     if force_build:
@@ -155,7 +204,9 @@ def main():
 
     print("==> TQL interpreter tests\n")
     for t in tests:
-        run_test(t)
+        run_test(t, keep_html)
+    if not filter_args:
+        run_cli_path_test()
 
     print()
     print("=" * 44)

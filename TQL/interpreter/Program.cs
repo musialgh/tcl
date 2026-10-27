@@ -4,6 +4,10 @@ using TqlInterpreter;
 
 static void Die(string msg) { Console.Error.WriteLine($"tql: {msg}"); Environment.Exit(1); }
 
+/// <summary>Resolve a command-line path against the caller's working directory.</summary>
+static string ResolveCliPath(string path, string invocationDirectory) =>
+    Path.GetFullPath(path, invocationDirectory);
+
 /// <summary>Drain all blank-line-separated tables from a reader until EOF.</summary>
 static List<Table> ReadAllTables(TextReader rdr)
 {
@@ -35,6 +39,9 @@ usage: tql <script> {[-r <file>] -i <table>} {[-w <file>] -o <table>} [-b]
   -b, --browse        Open each -w output file with xdg-open after writing
   -h, --help          Show this help and exit
 
+  Relative command-line paths are resolved against the caller's current
+  working directory. Paths used inside a TQL script are script-relative.
+
 Examples:
   tql script.tql -r input.csv -i marks -w report.csv -o report
   tql script.tql -i marks -o report                    # stdin / stdout
@@ -47,9 +54,10 @@ if (args.Length == 0)
     Environment.Exit(1);
 }
 
-string scriptPath = args[0];
+string invocationDirectory = Environment.CurrentDirectory;
+string scriptArgument = args[0];
 
-if (scriptPath is "-h" or "--help")
+if (scriptArgument is "-h" or "--help")
 {
     Console.WriteLine(Help);
     Environment.Exit(0);
@@ -73,7 +81,7 @@ for (int a = 1; a < args.Length; a++)
 
         case "-r":
             if (++a >= args.Length) Die("-r requires a file argument");
-            pendingRead = args[a] == "-" ? null : args[a];
+            pendingRead = args[a] == "-" ? null : ResolveCliPath(args[a], invocationDirectory);
             break;
 
         case "-i":
@@ -84,7 +92,7 @@ for (int a = 1; a < args.Length; a++)
 
         case "-w":
             if (++a >= args.Length) Die("-w requires a file argument");
-            pendingWrite = args[a] == "-" ? null : args[a];
+            pendingWrite = args[a] == "-" ? null : ResolveCliPath(args[a], invocationDirectory);
             break;
 
         case "-o":
@@ -105,12 +113,13 @@ for (int a = 1; a < args.Length; a++)
 
 // ── resolve script path ───────────────────────────────────────────────────────
 
+string scriptPath = ResolveCliPath(scriptArgument, invocationDirectory);
 if (!File.Exists(scriptPath))
 {
     var withExt = scriptPath.EndsWith(".tql", StringComparison.OrdinalIgnoreCase)
         ? scriptPath : scriptPath + ".tql";
     if (File.Exists(withExt)) scriptPath = withExt;
-    else Die($"script not found: {scriptPath}");
+    else Die($"script not found: {scriptArgument}");
 }
 
 string scriptDir = Path.GetDirectoryName(Path.GetFullPath(scriptPath)) ?? ".";
