@@ -14,4 +14,4 @@ CALL evaluate_round_final(TRUE AS do_skating);
 
 # only for testing purpose, dump report
 IF FALSE:
-    SAVE TABLE report INTO 'test-data/cms-finale-report.csv';
+    SAVE TABLE report INTO 'test-data/cms-finale-example-p-report.csv';

@@ -176,15 +176,15 @@ the CSV receive their declared `DEFAULT`.  Existing rows are discarded before lo
 | `cross-majority-skating.tql` | reference | full CMS adjudication logic |
 | `run-cms-finale.tql` | test entry point | calls `evaluate_round_final(TRUE)` |
 | `run-cms-elimination.tql` | test entry point | calls `evaluate_round_elimination()` |
-| `final_round.tql` | **outdated** | no WHEN syntax, no `{ col = val }` ROW in interpreter |
 
 ## Test data and runner
 
 ```
-test-data/cms-finale-marks.csv            ← 150 rows (6 starts × 5 dances × 5 judges)
+test-data/cms-finale-example-p-marks.csv  ← Appendix 2 example P (150 marks)
 test-data/cms-elimination-marks.csv       ← same marks, places 1-3 → 1 (cross), 4-6 → 0
-test-data/cms-finale-report.expected.csv  ← snapshot for finale test
-test-data/cms-elimination-report.expected.csv ← snapshot for elimination test
+test-data/cms-finale-example-m-marks.csv  ← Appendix 2 example M
+test-data/cms-finale-example-n-marks.csv  ← Appendix 2 example N
+test-data/*-report.expected.csv           ← placement rows only, without reason text
 ```
 
 Run with:
@@ -194,9 +194,6 @@ python3 run-tests.py --build    # force rebuild first
 python3 run-tests.py finale     # filter by name
 ```
 
-To update a snapshot after an intentional output change:
-```bash
-dotnet run --project interpreter/TqlInterpreter.csproj --no-build -- \
-  run-cms-finale.tql -r test-data/cms-finale-marks.csv -i marks \
-  -w test-data/cms-finale-report.expected.csv -o report
-```
+Expected CSVs contain only `place_min`, `place_max`, and (for individual
+dances) `place_val` rows. The runner compares their data columns as an unordered
+multiset, so report ordering and changes to `reason` text do not affect tests.

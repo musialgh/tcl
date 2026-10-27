@@ -2,7 +2,8 @@
 """
 Integration tests for the TQL interpreter.
 Builds the interpreter once, runs each test case, and compares output
-line-by-line against the stored expected CSV.
+against compact expected CSVs containing only placement rows. Comparison uses
+the data columns from each expected CSV and ignores row order and reason text.
 
 Usage:
     python3 run-tests.py          # run all tests
@@ -10,8 +11,11 @@ Usage:
     python3 run-tests.py <name>   # run only tests whose name contains <name>
 """
 
+import csv
+import io
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -20,12 +24,20 @@ TQL  = ["dotnet", "run", "--project", str(PROJ), "--no-build", "--"]
 
 TESTS = [
     {
-        "name":     "finale",
+        "name":     "finale-example-m",
         "script":   "run-cms-finale.tql",
-        "input":    "test-data/cms-finale-marks.csv",
+        "input":    "test-data/cms-finale-example-m-marks.csv",
         "table":    "marks",
         "output":   "report",
-        "expected": "test-data/cms-finale-report.expected.csv",
+        "expected": "test-data/cms-finale-example-m-report.expected.csv",
+    },
+    {
+        "name":     "finale-example-p",
+        "script":   "run-cms-finale.tql",
+        "input":    "test-data/cms-finale-example-p-marks.csv",
+        "table":    "marks",
+        "output":   "report",
+        "expected": "test-data/cms-finale-example-p-report.expected.csv",
     },
     {
         "name":     "elimination",
@@ -34,6 +46,14 @@ TESTS = [
         "table":    "marks",
         "output":   "report",
         "expected": "test-data/cms-elimination-report.expected.csv",
+    },
+    {
+        "name":     "finale-example-n",
+        "script":   "run-cms-finale.tql",
+        "input":    "test-data/cms-finale-example-n-marks.csv",
+        "table":    "marks",
+        "output":   "report",
+        "expected": "test-data/cms-finale-example-n-report.expected.csv",
     },
 ]
 
@@ -75,24 +95,43 @@ def run_test(t: dict):
     if result.returncode != 0:
         return
 
-    actual   = result.stdout.splitlines()
-    expected = (ROOT / t["expected"]).read_text().splitlines()
+    actual_reader = csv.DictReader(io.StringIO(result.stdout), delimiter=";")
+    expected_path = ROOT / t["expected"]
+    with expected_path.open(newline="") as stream:
+        expected_reader = csv.DictReader(stream, delimiter=";")
+        columns = expected_reader.fieldnames or []
+        expected_rows = list(expected_reader)
 
-    check(f"{name}: row count ({len(actual)} rows)",
-          len(actual) == len(expected),
-          f"expected {len(expected)}, got {len(actual)}")
+    missing_columns = [column for column in columns if column not in (actual_reader.fieldnames or [])]
+    if missing_columns:
+        check(f"{name}: placement data columns", False,
+              f"missing output columns: {', '.join(missing_columns)}")
+        return
 
-    mismatches = [
-        (i + 1, exp, act)
-        for i, (exp, act) in enumerate(zip(expected, actual))
-        if exp != act
-    ]
-    check(f"{name}: output matches expected",
-          len(mismatches) == 0,
-          "\n        ".join(
-              f"line {ln}: expected {e!r}\n                  got     {a!r}"
-              for ln, e, a in mismatches[:5]
-          ))
+    placement_keys = {row["key"] for row in expected_rows}
+    expected = Counter(tuple(row[column] for column in columns) for row in expected_rows)
+    actual = Counter(
+        tuple(row[column] for column in columns)
+        for row in actual_reader
+        if row["key"] in placement_keys
+    )
+
+    missing = expected - actual
+    extra = actual - expected
+
+    def describe(rows: Counter) -> list[str]:
+        descriptions = []
+        for values, count in rows.items():
+            data = ", ".join(f"{column}={value!r}" for column, value in zip(columns, values))
+            descriptions.append(f"{count}x ({data})")
+        return descriptions
+
+    detail = "\n        ".join(
+        [f"missing: {row}" for row in describe(missing)[:5]]
+        + [f"extra:   {row}" for row in describe(extra)[:5]]
+    )
+    check(f"{name}: placement rows match expected data",
+          not missing and not extra, detail)
 
 # ── main ──────────────────────────────────────────────────────────────────────
 

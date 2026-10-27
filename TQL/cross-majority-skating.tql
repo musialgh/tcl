@@ -13,6 +13,7 @@ FUNCTION init_globals():
     GLOBAL jury     = SELECT adjudicator   AS judge FROM marks WHERE marks.round = round GROUP BY judge;
     GLOBAL dances   = SELECT round_element AS dance FROM marks WHERE marks.round = round GROUP BY dance;
     GLOBAL unplaced = starts;       # to be reduced on final place assignments
+    GLOBAL tie_sum  = 0;            # to be set to sum of places for current tie group (for R10, R11)
 # init_globals()
 
 
@@ -119,7 +120,7 @@ FUNCTION refine_counts_and_sums(marks,              # table (start, dance, adjud
 FUNCTION evaluate_round_final(do_skating = TRUE): # resolve ties via skating rules 10, 11 if TRUE
     # prepare environment
     CALL init_globals();
-    GLOBAL marks, round, report, starts, unplaced, dances;
+    GLOBAL marks, round, report, starts, unplaced, dances, tie_sum;
 
     # extract current round from marks for readability
     LET final_marks = SELECT start, round_element AS dance, adjudicator, value FROM marks 
@@ -140,39 +141,50 @@ FUNCTION evaluate_round_final(do_skating = TRUE): # resolve ties via skating rul
     WHILE ROWS(unplaced):
     
         LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
-        LET scores = SELECT start, value AS sum FROM places_sums WHERE start IN unplaced 
-                                ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
+        LET scores = SELECT start, value AS pval_sum FROM places_sums WHERE start IN unplaced
+                                ORDER BY pval_sum ASC LIMIT 1 ON DISTINCT pval_sum;
+        LET tie_sum = scores[1].pval_sum;
 
         # try to resolve on sum only
         IF ROWS(scores) = 1:
             CALL assign_place(scores.start, NULL AS dance, for_place,
-                              "R9a: lowest sum {scores.sum} of places over {ROWS(dances)} dances");
+                              "R9a: lowest sum {tie_sum} of places over {ROWS(dances)} dances");
         ELSE IF ROWS(scores) > 1 AND NOT do_skating:
             CALL assign_place(scores.start, NULL AS dance, for_place,
-                              "R9b, skating off: shared lowest sum {scores[1].sum}"
+                              "R9b, skating off: shared lowest sum {tie_sum}"
                               " of places over {ROWS(dances)} dances");
         # relay to skating
         ELSE IF ROWS(scores) > 1:
-            CALL perform_skating(final_marks, scores, for_place);
+            CALL apply_r10(final_marks, scores);
         # cannot/should not/will not happen, but would deadlock
         ELSE: ABORT "internal error: <scores> empty";
 # evaluate_round_final_skating()
 
 
-# Apply skating rules 10, 11 to given tie group.
-FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, value) with relevant marks
-                         scores,        # table (start, sum) with starts and place sum to consider for skating
-                         for_place):    # place to be assigned next
-    GLOBAL round, report;
+# Apply skating rule 10 to given tie group.
+# Must recursively assign *all* places in <tie> group, to honor places "reserved" by earlier R10 ties
+FUNCTION apply_r10(marks,       # table (start, dance, adjudicator, value) with relevant marks
+                   tie):        # table (start, value) with starts and place sums to consider for skating
+    GLOBAL round, report, starts, unplaced, tie_sum;
+
+    LET for_place  = ROWS(starts) - ROWS(unplaced) + 1; # next place to assign
+
+    # terminate recursion if no tie remains (cannot happen on top-level call)
+    IF ROWS(tie) = 0:
+        RETURN;
+    # a single remaining candidate is placed immediately, to avoid bogus R10, R11 reporting
+    ELSE IF ROWS(tie) = 1:
+        RETURN assign_place(tie.start, NULL AS dance, for_place,
+                            "R10c,d: single remaining place {for_place} from previous tie");
 
     # report r10 application
     LET apply_r10 = SELECT start, round AS round, "R10-applied" AS group, for_place AS subgroup, "X" AS value,
-                           "R9b: places sum {scores[1].sum} tie for place {for_place}" AS reason FROM scores;
+                           "R9b: places sum {tie_sum} tie for place {for_place}" AS reason FROM tie;
     INSERT INTO report VALUES apply_r10;
-    # fetch counts and sums better or equal target place
-    LET scores = SELECT start, COUNT(value) AS num, SUM(value) AS sum FROM report
+    # fetch counts and sums better or equal target place, while keeping num=0 entries in subset
+    LET scores = SELECT start, COUNT(value <= for_place) AS num, SUM(IF(value <= for_place, value, 0)) AS sum FROM report
                         WHERE report.round = round AND round_element IS NOT NULL AND key = "place_val" 
-                                AND value <= for_place AND start IN scores.start
+                                AND start IN tie.start
                         GROUP BY start;
  
     # report counts considered
@@ -181,25 +193,46 @@ FUNCTION perform_skating(marks,         # table (start, dance, adjudicator, valu
     LET scores = SELECT * FROM scores ORDER BY num DESC LIMIT 1 ON DISTINCT num;
     # try to resolve on count
     IF ROWS(scores) = 1:
-        RETURN assign_place(scores.start, NULL AS dance, for_place,
-                            "R10a,b: highest count {scores.num} on all places {for_place} or better");
-
-    # report sums considered
-    CALL report_sum(scores, NULL AS dance, "R10-criteria" AS group, for_place, "R10c,d for place {for_place}");
-    # fetch best-sum occurrences among candidates
-    LET scores = SELECT * FROM scores ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
-    # try to resolve on sum
-    IF ROWS(scores) = 1:
-        RETURN assign_place(scores.start, NULL AS dance, for_place,
+        CALL assign_place(scores.start, NULL AS dance, for_place,
+                          "R10a,b: highest count {scores.num} on all places {for_place} or better");
+    ELSE:
+        # report sums considered
+        CALL report_sum(scores, NULL AS dance, "R10-criteria" AS group, for_place, "R10c,d for place {for_place}");
+        # fetch best-sum occurrences among candidates
+        LET scores = SELECT * FROM scores ORDER BY sum ASC LIMIT 1 ON DISTINCT sum;
+        # try to resolve on sum
+        IF ROWS(scores) = 1:
+            CALL assign_place(scores.start, NULL AS dance, for_place,
                             "R10c,d: lowest sum {scores.sum} on all places {for_place} or better");
+        # relay to R11 if needed
+        ELSE IF ROWS(scores) > 1:
+            CALL apply_r11(marks, scores, for_place);
+        # cannot/should not/will not happen, but would deadlock
+        ELSE: ABORT "internal error: <scores> empty";
+
+    # invoke R10 on remainder of input tie
+    LET tie = SELECT * FROM tie WHERE start IN unplaced;
+    CALL apply_r10(marks, tie);
+# apply_r10()
+
+
+# Apply skating rule 11 to given tie group.
+# Must recursively assign *all* places in <tie> group, to honor places "reserved" by earlier R10 ties
+FUNCTION apply_r11(marks,       # table (start, dance, adjudicator, value) with relevant marks
+                   tie,         # table (start, sum) with starts and place sum to consider for skating
+                   for_place):  # place to be assigned next
+    GLOBAL round, report, starts, unplaced;
 
     # report r11 application
     LET apply_r11 = SELECT start, round AS round, "R11-applied" AS group, for_place AS subgroup, "X" AS value, 
-                           "R10e: sum {scores[1].sum} tie on all places {for_place} or better" AS reason FROM scores;
+                           "R10e: sum {tie[1].sum} tie on all places {for_place} or better" AS reason FROM tie;
     INSERT INTO report VALUES apply_r11;
     # invoke rules 5 to 8, taking TSO Appendix 2 sort of literally
-    CALL refine_counts_and_sums(marks, scores.start, NULL AS dance, for_place AS min_by_place);
-# perform_skating()
+    CALL refine_counts_and_sums(marks, tie.start, NULL AS dance, for_place AS min_by_place);
+    # invoke R10 on remainder of input tie
+    LET tie = SELECT * FROM tie WHERE start IN unplaced;
+    CALL apply_r10(marks, tie);
+# apply_r11()
 
 
 # ================================== Helpers ==================================
