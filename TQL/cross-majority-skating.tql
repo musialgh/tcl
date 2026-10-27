@@ -38,8 +38,8 @@ FUNCTION evaluate_round_elimination():
 
     # generate placing
     FOR s IN total_counts:
-        LET placing = SELECT                  1 + COUNT(value < s.value) AS place_min,
-                             ROWS(total_counts) - COUNT(value > s.value) AS place_max 
+        LET placing = SELECT                  1 + COUNT(value > s.value) AS place_min,
+                             ROWS(total_counts) - COUNT(value < s.value) AS place_max 
                         FROM total_counts;
         IF placing.place_min = placing.place_max:
             LET reason = "F6.8.1: single rank {placing.place_min} in count of marks";
