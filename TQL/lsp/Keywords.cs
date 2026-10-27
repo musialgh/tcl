@@ -287,20 +287,6 @@ static class Keywords
 
         ["ORDER"] = "**ORDER BY `<col-list> [ASC|DESC]`** — sorts the SELECT result.",
 
-        ["PLACE_MAX"] = """
-            **PLACE_MAX(`<expr> [, {ASC|DESC}]`)**
-            Maximum of the placement range when values tie.
-            If _m_ rows share rank _k_, each gets [k, k+m−1]; PLACE_MAX returns k+m−1.
-            `ASC` (default) = smaller value → better rank.
-            """,
-
-        ["PLACE_MIN"] = """
-            **PLACE_MIN(`<expr> [, {ASC|DESC}]`)**
-            Minimum of the placement range when values tie.
-            If _m_ rows share rank _k_, each gets [k, k+m−1]; PLACE_MIN returns k.
-            `ASC` (default) = smaller value → better rank.
-            """,
-
         ["SELECT"] = """
             **SELECT**
             ```

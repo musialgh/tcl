@@ -140,7 +140,7 @@ check("completion(empty prefix): isIncomplete == false",
       r3.get("isIncomplete") is False)
 for kw in ["SELECT", "FUNCTION", "FOR", "WHILE", "IF", "LET",
            "UPDATE", "INSERT", "CREATE", "DROP", "ADD", "IMPORT",
-           "PLACE_MIN", "PLACE_MAX", "SUM", "COUNT", "AVG", "MEDIAN",
+           "SUM", "COUNT", "AVG", "MEDIAN",
            "GLOBAL", "ABORT"]:
     check(f"completion(empty prefix): includes {kw}", kw in items3)
 

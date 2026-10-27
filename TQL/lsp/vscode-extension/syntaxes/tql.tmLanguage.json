@@ -51,7 +51,7 @@
     },
 
     "function-builtin": {
-      "match": "\\b(?:IF|SUM|COUNT|MIN|MAX|AVG|FIRST|LAST|MEDIAN|PLACE_MIN|PLACE_MAX|ROWS|ROW)(?=\\s*\\()",
+      "match": "\\b(?:IF|SUM|COUNT|MIN|MAX|AVG|FIRST|LAST|MEDIAN|ROWS|ROW)(?=\\s*\\()",
       "name": "support.function.builtin.tql"
     },
 

@@ -32,7 +32,7 @@ produces `vscode-extension/tql-lsp-<version>-<platform>.vsix`.
 ## Installing on the recipient's machine
 
 ```bash
-code --install-extension tql-lsp-0.0.1-linux-x64.vsix
+code --install-extension tql-lsp-?.?.?-linux-x64.vsix
 ```
 
 Or via VS Code: **Extensions → ⋮ menu → Install from VSIX…**
